@@ -2,13 +2,17 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
 import 'package:label_pro_client/domain/models/bounding_box.dart';
+import 'package:label_pro_client/domain/models/label.dart';
 
 part 'bounding_box_task_state.dart';
 
 class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
-  BoundingBoxTaskCubit()
-      : super(
-          BoundingBoxTaskState.initial(),
+  BoundingBoxTaskCubit({
+    required List<Label> labels,
+  }) : super(
+          BoundingBoxTaskState.initial(
+            availableLabels: labels,
+          ),
         ) {
     _init();
   }
@@ -44,17 +48,25 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
   }
 
   void createBoundingBox(
-    BoundingBox newBox,
+    Rect rect,
     Size size,
   ) {
     emit(
       state.copyWith(
         boxes: [
           ...state.boxes,
-          newBox.copyWith(
+          BoundingBox(
             box: _resizeToImageSize(
-              rect: newBox.box,
+              rect: rect,
               originalSize: size,
+            ),
+            label: Label(
+              id: state.selectedClassId,
+              name: state.availableLabels
+                      .where((e) => e.id == state.selectedClassId)
+                      .firstOrNull
+                      ?.name ??
+                  '',
             ),
           )
         ],
@@ -69,6 +81,9 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
     required double zoom,
     required Size size,
   }) {
+    if (index >= state.boxes.length) {
+      return;
+    }
     final oldBox = state.boxes.removeAt(index);
     final newBox = Rect.fromLTRB(
       oldBox.box.left * zoom + offset.dx,
@@ -97,6 +112,10 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
     required int index,
     required Size size,
   }) {
+    if (index >= state.boxes.length) {
+      return;
+    }
+
     final box = state.boxes[index];
 
     emit(
@@ -119,7 +138,42 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
   void editBoundingBox(int index) {
     emit(
       state.copyWith(
-        editingBoxIndex: () => index,
+        editingBoxIndexes: [index],
+      ),
+    );
+  }
+
+  void clearEditBoundingBox() {
+    emit(
+      state.copyWith(
+        editingBoxIndexes: [],
+      ),
+    );
+  }
+
+  void removeBoundingBox(int index) {
+    emit(
+      state.copyWith(
+        boxes: state.boxes..removeAt(index),
+        editingBoxIndexes: state.editingBoxIndexes
+            .where(
+              (e) => e != index,
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  void changeSelectedClassId(String newClassId) {
+    emit(
+      state.copyWith(selectedClassId: newClassId),
+    );
+  }
+
+  void updateEditAll(bool value) {
+    emit(
+      state.copyWith(
+        isEditAllEnabled: value,
       ),
     );
   }

@@ -16,8 +16,10 @@ class BoundingBoxContainer extends StatefulWidget {
     required this.onStartDrag,
     required this.onEndDrag,
     required this.isDragged,
+    required this.color,
   });
 
+  final Color color;
   final BoundingBox box;
   final double zoom;
   final bool isEditing;
@@ -62,196 +64,203 @@ class _BoundingBoxContainerState extends State<BoundingBoxContainer> {
   @override
   Widget build(BuildContext context) {
     final correctBox = widget.box.box.withCorrectCorners;
-    return GestureDetector(
-      behavior: widget.isEditing ? HitTestBehavior.opaque : null,
-      onPanDown: (_) {
-        widget.onStartDrag();
-      },
-      onPanUpdate: (details) {
-        widget.onMove(details.delta);
-      },
-      onPanEnd: (_) {
-        widget.onEndDrag();
-      },
-      child: MouseRegion(
-        cursor: widget.isDragged
-            ? SystemMouseCursors.grabbing
-            : widget.isEditing
-                ? SystemMouseCursors.grab
-                : MouseCursor.defer,
-        child: SizedBox(
-          width: correctBox.width * widget.zoom,
-          height: correctBox.height * widget.zoom,
-          child: Stack(
-            children: [
-              IgnorePointer(
-                child: CustomPaint(
-                  size: Size(
-                    correctBox.width * widget.zoom,
-                    correctBox.height * widget.zoom,
+    return IgnorePointer(
+      ignoring: !widget.isEditing,
+      child: GestureDetector(
+        behavior: widget.isEditing ? HitTestBehavior.opaque : null,
+        onPanDown: (_) {
+          widget.onStartDrag();
+        },
+        onPanUpdate: (details) {
+          widget.onMove(details.delta);
+        },
+        onPanEnd: (_) {
+          widget.onEndDrag();
+        },
+        child: MouseRegion(
+          cursor: widget.isDragged
+              ? SystemMouseCursors.grabbing
+              : widget.isEditing
+                  ? SystemMouseCursors.grab
+                  : MouseCursor.defer,
+          child: SizedBox(
+            width: correctBox.width * widget.zoom,
+            height: correctBox.height * widget.zoom,
+            child: Stack(
+              children: [
+                if (widget.isEditing)
+                  Container(
+                    color: widget.color.withValues(alpha: 0.25),
                   ),
-                  foregroundPainter: BoundingBoxPainter(
-                    boundingBox: widget.box.box,
-                    zoom: widget.zoom,
-                    color: Colors.red,
-                    text: widget.box.label.name,
+                IgnorePointer(
+                  child: CustomPaint(
+                    size: Size(
+                      correctBox.width * widget.zoom,
+                      correctBox.height * widget.zoom,
+                    ),
+                    foregroundPainter: BoundingBoxPainter(
+                      boundingBox: widget.box.box,
+                      zoom: widget.zoom,
+                      color: widget.color,
+                      text: widget.box.label.name,
+                    ),
                   ),
                 ),
-              ),
-              if (widget.isEditing)
-                Stack(
-                  children: [
-                    Positioned(
-                      right: -4,
-                      bottom: -4,
-                      child: DragPoint(
-                        onStartMove: (offset) {
-                          widget.onStartDrag();
-                          startPos = Offset(
-                            widthNegative
-                                ? (widget.box.box.left) * widget.zoom - offset.dx
-                                : (widget.box.box.right) * widget.zoom - offset.dx,
-                            heightNegative
-                                ? (widget.box.box.top) * widget.zoom - offset.dy
-                                : (widget.box.box.bottom) * widget.zoom - offset.dy,
-                          );
-                        },
-                        onMovePoint: (offset) {
-                          widget.onChangeSize(
-                            Rect.fromLTRB(
+                if (widget.isEditing)
+                  Stack(
+                    children: [
+                      Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: DragPoint(
+                          onStartMove: (offset) {
+                            widget.onStartDrag();
+                            startPos = Offset(
                               widthNegative
-                                  ? offset.dx + startPos.dx
-                                  : widget.box.box.left * widget.zoom,
+                                  ? (widget.box.box.left) * widget.zoom - offset.dx
+                                  : (widget.box.box.right) * widget.zoom - offset.dx,
                               heightNegative
-                                  ? offset.dy + startPos.dy
-                                  : widget.box.box.top * widget.zoom,
-                              widthNegative
-                                  ? widget.box.box.right * widget.zoom
-                                  : offset.dx + startPos.dx,
-                              heightNegative
-                                  ? widget.box.box.bottom * widget.zoom
-                                  : offset.dy + startPos.dy,
-                            ),
-                          );
-                        },
-                        onMoveEnd: onChangeSizeEnd,
-                      ),
-                    ),
-                    Positioned(
-                      left: -4,
-                      top: -4,
-                      child: DragPoint(
-                        onStartMove: (offset) {
-                          widget.onStartDrag();
-                          setState(
-                            () {
-                              startPos = Offset(
+                                  ? (widget.box.box.top) * widget.zoom - offset.dy
+                                  : (widget.box.box.bottom) * widget.zoom - offset.dy,
+                            );
+                          },
+                          onMovePoint: (offset) {
+                            widget.onChangeSize(
+                              Rect.fromLTRB(
                                 widthNegative
-                                    ? (widget.box.box.right) * widget.zoom - offset.dx
-                                    : (widget.box.box.left) * widget.zoom - offset.dx,
+                                    ? offset.dx + startPos.dx
+                                    : widget.box.box.left * widget.zoom,
                                 heightNegative
-                                    ? (widget.box.box.bottom) * widget.zoom - offset.dy
-                                    : (widget.box.box.top) * widget.zoom - offset.dy,
-                              );
-                            },
-                          );
-                        },
-                        onMovePoint: (offset) {
-                          widget.onChangeSize(
-                            Rect.fromLTRB(
-                              widthNegative
-                                  ? widget.box.box.left * widget.zoom
-                                  : offset.dx + startPos.dx,
-                              heightNegative
-                                  ? widget.box.box.top * widget.zoom
-                                  : offset.dy + startPos.dy,
-                              widthNegative
-                                  ? offset.dx + startPos.dx
-                                  : widget.box.box.right * widget.zoom,
-                              heightNegative
-                                  ? offset.dy + startPos.dy
-                                  : widget.box.box.bottom * widget.zoom,
-                            ),
-                          );
-                        },
-                        onMoveEnd: onChangeSizeEnd,
+                                    ? offset.dy + startPos.dy
+                                    : widget.box.box.top * widget.zoom,
+                                widthNegative
+                                    ? widget.box.box.right * widget.zoom
+                                    : offset.dx + startPos.dx,
+                                heightNegative
+                                    ? widget.box.box.bottom * widget.zoom
+                                    : offset.dy + startPos.dy,
+                              ),
+                            );
+                          },
+                          onMoveEnd: onChangeSizeEnd,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      left: -4,
-                      bottom: -4,
-                      child: DragPoint(
-                        onStartMove: (offset) {
-                          widget.onStartDrag();
-                          startPos = Offset(
-                            widthNegative
-                                ? (widget.box.box.right) * widget.zoom - offset.dx
-                                : (widget.box.box.left) * widget.zoom - offset.dx,
-                            heightNegative
-                                ? (widget.box.box.top) * widget.zoom - offset.dy
-                                : (widget.box.box.bottom) * widget.zoom - offset.dy,
-                          );
-                        },
-                        onMovePoint: (offset) {
-                          widget.onChangeSize(
-                            Rect.fromLTRB(
-                              widthNegative
-                                  ? widget.box.box.left * widget.zoom
-                                  : offset.dx + startPos.dx,
-                              heightNegative
-                                  ? offset.dy + startPos.dy
-                                  : widget.box.box.top * widget.zoom,
-                              widthNegative
-                                  ? offset.dx + startPos.dx
-                                  : widget.box.box.right * widget.zoom,
-                              heightNegative
-                                  ? widget.box.box.bottom * widget.zoom
-                                  : offset.dy + startPos.dy,
-                            ),
-                          );
-                        },
-                        onMoveEnd: onChangeSizeEnd,
+                      Positioned(
+                        left: -4,
+                        top: -4,
+                        child: DragPoint(
+                          onStartMove: (offset) {
+                            widget.onStartDrag();
+                            setState(
+                              () {
+                                startPos = Offset(
+                                  widthNegative
+                                      ? (widget.box.box.right) * widget.zoom - offset.dx
+                                      : (widget.box.box.left) * widget.zoom - offset.dx,
+                                  heightNegative
+                                      ? (widget.box.box.bottom) * widget.zoom - offset.dy
+                                      : (widget.box.box.top) * widget.zoom - offset.dy,
+                                );
+                              },
+                            );
+                          },
+                          onMovePoint: (offset) {
+                            widget.onChangeSize(
+                              Rect.fromLTRB(
+                                widthNegative
+                                    ? widget.box.box.left * widget.zoom
+                                    : offset.dx + startPos.dx,
+                                heightNegative
+                                    ? widget.box.box.top * widget.zoom
+                                    : offset.dy + startPos.dy,
+                                widthNegative
+                                    ? offset.dx + startPos.dx
+                                    : widget.box.box.right * widget.zoom,
+                                heightNegative
+                                    ? offset.dy + startPos.dy
+                                    : widget.box.box.bottom * widget.zoom,
+                              ),
+                            );
+                          },
+                          onMoveEnd: onChangeSizeEnd,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: DragPoint(
-                        onStartMove: (offset) {
-                          widget.onStartDrag();
-                          startPos = Offset(
-                            widthNegative
-                                ? (widget.box.box.left) * widget.zoom - offset.dx
-                                : (widget.box.box.right) * widget.zoom - offset.dx,
-                            heightNegative
-                                ? (widget.box.box.bottom) * widget.zoom - offset.dy
-                                : (widget.box.box.top) * widget.zoom - offset.dy,
-                          );
-                        },
-                        onMovePoint: (offset) {
-                          widget.onChangeSize(
-                            Rect.fromLTRB(
+                      Positioned(
+                        left: -4,
+                        bottom: -4,
+                        child: DragPoint(
+                          onStartMove: (offset) {
+                            widget.onStartDrag();
+                            startPos = Offset(
                               widthNegative
-                                  ? offset.dx + startPos.dx
-                                  : widget.box.box.left * widget.zoom,
+                                  ? (widget.box.box.right) * widget.zoom - offset.dx
+                                  : (widget.box.box.left) * widget.zoom - offset.dx,
                               heightNegative
-                                  ? widget.box.box.top * widget.zoom
-                                  : offset.dy + startPos.dy,
-                              widthNegative
-                                  ? widget.box.box.right * widget.zoom
-                                  : offset.dx + startPos.dx,
-                              heightNegative
-                                  ? offset.dy + startPos.dy
-                                  : widget.box.box.bottom * widget.zoom,
-                            ),
-                          );
-                        },
-                        onMoveEnd: onChangeSizeEnd,
+                                  ? (widget.box.box.top) * widget.zoom - offset.dy
+                                  : (widget.box.box.bottom) * widget.zoom - offset.dy,
+                            );
+                          },
+                          onMovePoint: (offset) {
+                            widget.onChangeSize(
+                              Rect.fromLTRB(
+                                widthNegative
+                                    ? widget.box.box.left * widget.zoom
+                                    : offset.dx + startPos.dx,
+                                heightNegative
+                                    ? offset.dy + startPos.dy
+                                    : widget.box.box.top * widget.zoom,
+                                widthNegative
+                                    ? offset.dx + startPos.dx
+                                    : widget.box.box.right * widget.zoom,
+                                heightNegative
+                                    ? widget.box.box.bottom * widget.zoom
+                                    : offset.dy + startPos.dy,
+                              ),
+                            );
+                          },
+                          onMoveEnd: onChangeSizeEnd,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-            ],
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: DragPoint(
+                          onStartMove: (offset) {
+                            widget.onStartDrag();
+                            startPos = Offset(
+                              widthNegative
+                                  ? (widget.box.box.left) * widget.zoom - offset.dx
+                                  : (widget.box.box.right) * widget.zoom - offset.dx,
+                              heightNegative
+                                  ? (widget.box.box.bottom) * widget.zoom - offset.dy
+                                  : (widget.box.box.top) * widget.zoom - offset.dy,
+                            );
+                          },
+                          onMovePoint: (offset) {
+                            widget.onChangeSize(
+                              Rect.fromLTRB(
+                                widthNegative
+                                    ? offset.dx + startPos.dx
+                                    : widget.box.box.left * widget.zoom,
+                                heightNegative
+                                    ? widget.box.box.top * widget.zoom
+                                    : offset.dy + startPos.dy,
+                                widthNegative
+                                    ? widget.box.box.right * widget.zoom
+                                    : offset.dx + startPos.dx,
+                                heightNegative
+                                    ? offset.dy + startPos.dy
+                                    : widget.box.box.bottom * widget.zoom,
+                              ),
+                            );
+                          },
+                          onMoveEnd: onChangeSizeEnd,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ),
       ),

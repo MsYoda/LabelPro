@@ -1,5 +1,5 @@
 import 'package:auto_route/annotations.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/features/tagging/bloc/tagging_cubit.dart';
 import 'package:label_pro_client/features/tagging/screen/tagging_content.dart';
@@ -16,7 +16,10 @@ class TaggingScreen extends StatelessWidget {
       create: (_) => TaggingCubit(),
       child: BlocBuilder<TaggingCubit, TaggingState>(
         builder: (context, state) {
-          return TaggingContent(state: state);
+          return Material(
+            color: Colors.white,
+            child: TaggingContent(state: state),
+          );
         },
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:label_pro_client/core_ui/theme/theme.dart';
 
 import 'core/core.dart';
 import 'navigation/navigation_di.dart';
@@ -16,6 +17,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppRouter appRouter = appLocator<AppRouter>();
     return MaterialApp.router(
+      theme: theme,
       debugShowCheckedModeBanner: false,
       routerConfig: appRouter.config(),
       themeMode: ThemeMode.light,

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core_ui/theme/app_colors.dart';
 import 'package:label_pro_client/domain/models/label.dart';
 
+import '../../../widgets/submit_button.dart';
 import '../bloc/bounding_box_task_cubit.dart';
 import '../widgets/bounding_box_image.dart';
 
@@ -25,6 +26,7 @@ class BoundingBoxTaskContent extends StatelessWidget {
         color: Colors.transparent,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Row(
@@ -33,7 +35,45 @@ class BoundingBoxTaskContent extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Center(
-                      child: BoundingBoxImage(state: state),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(height: 8),
+                          Text(
+                            'Select label type and start tagging',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                          SizedBox(height: 24),
+                          Expanded(
+                            child: Builder(builder: (context) {
+                              if (state.isTaskLoading) {
+                                return Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
+                              if (state.isDatasetEmpty) {
+                                return Center(
+                                  child: Text(
+                                    'Dataset is over, you can select another in settings',
+                                  ),
+                                );
+                              }
+                              return BoundingBoxImage(state: state);
+                            }),
+                          ),
+                          SizedBox(height: 24),
+                          if (!state.isDatasetEmpty && !state.isTaskLoading)
+                            SubmitButton(
+                              onPressed: () {
+                                cubit.submitTask();
+                              },
+                            ),
+                          SizedBox(height: 8),
+                        ],
+                      ),
                     ),
                   ),
                   GestureDetector(
@@ -117,6 +157,10 @@ class AvailableLabelsList extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 15),
             child: Text(
               'Available labels',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
           SizedBox(height: 4),
@@ -181,6 +225,10 @@ class TaggedLabelsList extends StatelessWidget {
               children: [
                 Text(
                   'Labels list',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
                 Spacer(),
                 Material(

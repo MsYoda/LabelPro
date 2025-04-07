@@ -8,15 +8,21 @@ class AppRouter extends RootStackRouter {
   @override
   List<AutoRoute> get routes => <AutoRoute>[
         AutoRoute(
-          page: TaggingRoute.page,
+          page: HomeRoute.page,
           initial: true,
           children: [
             AutoRoute(
-              page: BoundingBoxTaskRoute.page,
-            ),
-            AutoRoute(
+              page: TaggingRoute.page,
               initial: true,
-              page: WordMarkerTaskRoute.page,
+              children: [
+                AutoRoute(
+                  page: BoundingBoxTaskRoute.page,
+                  initial: true,
+                ),
+                AutoRoute(
+                  page: WordMarkerTaskRoute.page,
+                ),
+              ],
             ),
           ],
         ),

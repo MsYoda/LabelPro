@@ -1,6 +1,7 @@
 import 'package:auto_route/annotations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/features/tagging/bloc/tagging_cubit.dart';
 import 'package:label_pro_client/features/tagging/tasks/bounding_box/bloc/bounding_box_task_cubit.dart';
 
@@ -17,6 +18,7 @@ class BoundingBoxTaskScreen extends StatelessWidget {
     final taggingState = context.read<TaggingCubit>().state;
     return BlocProvider(
       create: (_) => BoundingBoxTaskCubit(
+        datasetRepository: appLocator(),
         labels: taggingState.dataset.availableLabels,
       ),
       child: BlocBuilder<BoundingBoxTaskCubit, BoundingBoxTaskState>(

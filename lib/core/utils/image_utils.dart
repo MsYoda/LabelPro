@@ -15,7 +15,7 @@ Future<ui.Size> getImageSize(String imageUrl) async {
         frame.image.height.toDouble(),
       );
     } else {
-      throw HttpException('');
+      throw HttpException(response.statusCode.toString());
     }
   } catch (e) {
     rethrow;

@@ -20,4 +20,16 @@ class BoundingBox {
       label: label ?? this.label,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'box': {
+        'left': box.left,
+        'top': box.top,
+        'right': box.right,
+        'bottom': box.bottom,
+      },
+      'label': label.toJson(),
+    };
+  }
 }

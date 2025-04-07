@@ -100,10 +100,7 @@ class _BoundingBoxImageState extends State<BoundingBoxImage> {
                   cursor: isDragActive ? SystemMouseCursors.grabbing : MouseCursor.defer,
                   child: SizedBox(
                     child: Image.network(
-                      key: ValueKey(
-                        'https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg',
-                      ),
-                      'https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg',
+                      widget.state.imageUrl,
                       fit: BoxFit.cover,
                       width: widget.state.size.width * zoom,
                       height: widget.state.size.height * zoom,

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/domain/models/label.dart';
 import 'package:label_pro_client/features/tagging/tasks/word_marker/bloc/word_marker_task_cubit.dart';
 
+import '../../../widgets/submit_button.dart';
 import '../bloc/word_marker_task_state.dart';
 
 class WordMarkerTaskContent extends StatelessWidget {
@@ -13,19 +14,18 @@ class WordMarkerTaskContent extends StatelessWidget {
     required this.state,
   });
 
-  void foo(String text) {
-    print(text);
-  }
-
   void _showMenu({
     required BuildContext context,
     required Offset position,
     required int wordIndex,
   }) {
     final cubit = context.read<WordMarkerTaskCubit>();
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final localPosition = renderBox.globalToLocal(position);
     showMenu(
       context: context,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      position: RelativeRect.fromLTRB(
+          localPosition.dx, localPosition.dy, localPosition.dx + 1, localPosition.dy + 1),
       items: [
         PopupMenuItem(
           child: Text(
@@ -73,54 +73,105 @@ class WordMarkerTaskContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print(state.markedWords);
     return Material(
       color: Colors.white,
-      child: Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 60),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RichText(
-              text: TextSpan(
-                style: TextStyle(color: Colors.black),
-                children: [
-                  for (var i = 0; i < state.words.length; i++)
-                    WidgetSpan(
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTapDown: (details) {
-                            _showMenu(
-                              context: context,
-                              position: details.globalPosition,
-                              wordIndex: i,
-                            );
-                          },
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: state.colors[state.markedWords[i]?.id]
-                                      ?.withValues(alpha: 0.3),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  state.words[i].data,
-                                  style: const TextStyle(
-                                    color: Colors.black,
+            SizedBox(height: 32),
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 12,
+                    )
+                  ],
+                ),
+                child: ListView(
+                  children: [
+                    Text(
+                      'Tap on word and choose label',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 24),
+                    Text(
+                      'Legend',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    for (var i = 0; i < state.availableLabels.length; i++)
+                      LabelRow(
+                        color: state.colors[state.availableLabels[i].id]!,
+                        label: state.availableLabels[i],
+                        style: TextStyle(color: Colors.black, fontSize: 22),
+                      ),
+                    SizedBox(height: 24),
+                    RichText(
+                      text: TextSpan(
+                        style: TextStyle(color: Colors.black),
+                        children: [
+                          for (var i = 0; i < state.words.length; i++)
+                            WidgetSpan(
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                  onTapDown: (details) {
+                                    _showMenu(
+                                      context: context,
+                                      position: details.globalPosition,
+                                      wordIndex: i,
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: state.colors[state.markedWords[i]?.id]
+                                              ?.withValues(alpha: 0.3),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          state.words[i].data,
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 20,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(' '),
+                                    ],
                                   ),
                                 ),
                               ),
-                              Text(' '),
-                            ],
-                          ),
-                        ),
+                            ),
+                        ],
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
+            SizedBox(height: 24),
+            SubmitButton(
+              onPressed: () {},
+            ),
+            SizedBox(height: 24),
           ],
         ),
       ),
@@ -131,11 +182,13 @@ class WordMarkerTaskContent extends StatelessWidget {
 class LabelRow extends StatelessWidget {
   final Label label;
   final Color color;
+  final TextStyle? style;
 
   const LabelRow({
     super.key,
     required this.label,
     required this.color,
+    this.style,
   });
 
   @override
@@ -154,9 +207,10 @@ class LabelRow extends StatelessWidget {
         SizedBox(width: 8),
         Text(
           label.name,
-          style: TextStyle(
-            color: Colors.black,
-          ),
+          style: style ??
+              TextStyle(
+                color: Colors.black,
+              ),
         ),
       ],
     );

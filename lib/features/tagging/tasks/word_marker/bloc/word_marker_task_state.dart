@@ -9,7 +9,7 @@ class WordMarkerTaskState {
   final bool isLoading;
   final List<Label> availableLabels;
   final Map<int, Label> markedWords;
-  final Map<String, Color> colors;
+  final Map<int, Color> colors;
 
   const WordMarkerTaskState({
     required this.words,
@@ -32,7 +32,7 @@ class WordMarkerTaskState {
     bool? isLoading,
     List<Label>? availableLabels,
     Map<int, Label>? markedWords,
-    Map<String, Color>? colors,
+    Map<int, Color>? colors,
   }) {
     return WordMarkerTaskState(
       words: words ?? this.words,

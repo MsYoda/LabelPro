@@ -1,5 +1,5 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:label_pro_client/features/tagging/bloc/tagging_state.dart';
 
 class TaggingContent extends StatelessWidget {
@@ -12,6 +12,11 @@ class TaggingContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (state.isLoading) {
+      return Center(
+        child: CircularProgressIndicator(),
+      );
+    }
     return AutoRouter();
   }
 }

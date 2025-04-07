@@ -1,15 +1,23 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
 import 'package:label_pro_client/domain/models/bounding_box.dart';
 import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/models/task_types/bounding_box_solution_data.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
 
 part 'bounding_box_task_state.dart';
 
 class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
+  final DatasetRepository _datasetRepository;
+
   BoundingBoxTaskCubit({
+    required DatasetRepository datasetRepository,
     required List<Label> labels,
-  }) : super(
+  })  : _datasetRepository = datasetRepository,
+        super(
           BoundingBoxTaskState.initial(
             availableLabels: labels,
           ),
@@ -18,14 +26,36 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
   }
 
   Future<void> _init() async {
-    final size = await getImageSize(
-      'https://images.pexels.com/photos/45201/kitty-cat-kitten-pet-45201.jpeg',
-    );
+    final labels = state.availableLabels;
     emit(
-      state.copyWith(
-        size: size,
+      BoundingBoxTaskState.initial(
+        availableLabels: labels,
+        isTaskLoading: true,
       ),
     );
+    try {
+      final task = await _datasetRepository.getTaggingTask(datasetId: 1);
+
+      final size = await getImageSize(
+        'http://localhost:8000/file?file_path=${task.data}',
+      );
+      emit(
+        state.copyWith(
+          size: size,
+          imageUrl: 'http://localhost:8000/file?file_path=${task.data}',
+          isTaskLoading: false,
+          idInFile: task.idInFile,
+          filename: task.filename,
+        ),
+      );
+    } on DatasetIsEmpty {
+      emit(
+        state.copyWith(
+          isDatasetEmpty: true,
+          isTaskLoading: false,
+        ),
+      );
+    }
   }
 
   Rect _resizeToImageSize({
@@ -164,7 +194,7 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
     );
   }
 
-  void changeSelectedClassId(String newClassId) {
+  void changeSelectedClassId(int newClassId) {
     emit(
       state.copyWith(selectedClassId: newClassId),
     );
@@ -176,5 +206,24 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
         isEditAllEnabled: value,
       ),
     );
+  }
+
+  Future<void> submitTask() async {
+    print(
+      BoundingBoxTaskResultData(
+        boxes: state.boxes,
+      ).toJson(),
+    );
+    await _datasetRepository.submitTaggingTask(
+      TaggingTaskResult(
+        filename: state.filename,
+        idInFile: state.idInFile,
+        datasetId: 1,
+        data: BoundingBoxTaskResultData(
+          boxes: state.boxes,
+        ).toJson(),
+      ),
+    );
+    _init();
   }
 }

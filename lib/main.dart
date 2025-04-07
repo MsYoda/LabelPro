@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:label_pro_client/core_ui/theme/theme.dart';
 
 import 'core/core.dart';
-import 'navigation/navigation_di.dart';
+import 'di.dart';
 import 'navigation/router.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Di.initDependencies();
   runApp(const MyApp());
-  NavigationDI.init();
 }
 
 class MyApp extends StatelessWidget {

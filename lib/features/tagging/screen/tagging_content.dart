@@ -17,6 +17,11 @@ class TaggingContent extends StatelessWidget {
         child: CircularProgressIndicator(),
       );
     }
-    return AutoRouter();
+    if (state.dataset != null) {
+      return AutoTabsRouter();
+    }
+    return Center(
+      child: Text('Configure dataset access in settings first'),
+    );
   }
 }

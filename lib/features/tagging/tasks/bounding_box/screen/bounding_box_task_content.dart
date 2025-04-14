@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core_ui/theme/app_colors.dart';
 import 'package:label_pro_client/domain/models/label.dart';
 
-import '../../../widgets/submit_button.dart';
+import '../../../../../core_ui/submit_button.dart';
 import '../bloc/bounding_box_task_cubit.dart';
 import '../widgets/bounding_box_image.dart';
 
@@ -66,10 +66,13 @@ class BoundingBoxTaskContent extends StatelessWidget {
                           ),
                           SizedBox(height: 24),
                           if (!state.isDatasetEmpty && !state.isTaskLoading)
-                            SubmitButton(
-                              onPressed: () {
-                                cubit.submitTask();
-                              },
+                            SizedBox(
+                              width: 150,
+                              child: SubmitButton(
+                                onPressed: () {
+                                  cubit.submitTask();
+                                },
+                              ),
                             ),
                           SizedBox(height: 8),
                         ],

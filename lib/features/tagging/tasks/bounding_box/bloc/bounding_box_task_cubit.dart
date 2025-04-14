@@ -34,15 +34,15 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
       ),
     );
     try {
-      final task = await _datasetRepository.getTaggingTask(datasetId: 1);
+      final task = await _datasetRepository.getTaggingTask();
 
       final size = await getImageSize(
-        'http://localhost:8000/file?file_path=${task.data}',
+        buildUrl(task.data),
       );
       emit(
         state.copyWith(
           size: size,
-          imageUrl: 'http://localhost:8000/file?file_path=${task.data}',
+          imageUrl: buildUrl(task.data),
           isTaskLoading: false,
           idInFile: task.idInFile,
           filename: task.filename,

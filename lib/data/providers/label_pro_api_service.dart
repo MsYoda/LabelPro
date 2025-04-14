@@ -22,7 +22,7 @@ class LabelProApiService {
     final dataset = await _apiProvider.parsed(
       request: ApiRequest(
         method: HttpMethod.get,
-        url: 'http://localhost:8000/dataset/$id',
+        url: 'http://localhost:8080/dataset/$id',
       ),
       parser: Dataset.fromJson,
     );
@@ -33,7 +33,7 @@ class LabelProApiService {
     final task = await _apiProvider.parsed(
       request: ApiRequest(
         method: HttpMethod.get,
-        url: 'http://localhost:8000/task/',
+        url: 'http://localhost:8080/task/',
         params: {
           'dataset_id': datasetId,
         },
@@ -48,7 +48,7 @@ class LabelProApiService {
     await _apiProvider.none(
       request: ApiRequest(
         method: HttpMethod.post,
-        url: 'http://localhost:8000/task/',
+        url: 'http://localhost:8080/task/',
         body: FormData.fromMap(
           result.toJson(),
         ),

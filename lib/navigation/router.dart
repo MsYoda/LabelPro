@@ -7,22 +7,29 @@ class AppRouter extends RootStackRouter {
 
   @override
   List<AutoRoute> get routes => <AutoRoute>[
-        AutoRoute(
+        CustomRoute(
           page: HomeRoute.page,
           initial: true,
+          durationInMilliseconds: 0,
           children: [
-            AutoRoute(
+            CustomRoute(
               page: TaggingRoute.page,
               initial: true,
+              durationInMilliseconds: 0,
               children: [
-                AutoRoute(
+                CustomRoute(
                   page: BoundingBoxTaskRoute.page,
-                  initial: true,
+                  durationInMilliseconds: 0,
                 ),
-                AutoRoute(
+                CustomRoute(
                   page: WordMarkerTaskRoute.page,
+                  durationInMilliseconds: 0,
                 ),
               ],
+            ),
+            CustomRoute(
+              page: SettingsRoute.page,
+              durationInMilliseconds: 0,
             ),
           ],
         ),

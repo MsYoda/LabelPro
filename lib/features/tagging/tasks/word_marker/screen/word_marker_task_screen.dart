@@ -1,6 +1,7 @@
 import 'package:auto_route/annotations.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/features/tagging/bloc/tagging_cubit.dart';
 import 'package:label_pro_client/features/tagging/tasks/word_marker/bloc/word_marker_task_cubit.dart';
 import 'package:label_pro_client/features/tagging/tasks/word_marker/bloc/word_marker_task_state.dart';
@@ -15,7 +16,8 @@ class WordMarkerTaskScreen extends StatelessWidget {
     final taggingState = context.read<TaggingCubit>().state;
     return BlocProvider(
       create: (_) => WordMarkerTaskCubit(
-        labels: taggingState.dataset.availableLabels,
+        datasetRepository: appLocator(),
+        labels: taggingState.dataset!.availableLabels,
       ),
       child: BlocBuilder<WordMarkerTaskCubit, WordMarkerTaskState>(
         builder: (context, state) {

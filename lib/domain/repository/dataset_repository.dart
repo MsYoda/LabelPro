@@ -5,9 +5,8 @@ import '../models/dataset.dart';
 
 abstract interface class DatasetRepository {
   Future<Dataset> getDatasetById(int id);
-  Future<TaggingTask> getTaggingTask({
-    required int datasetId,
-  });
+  Future<TaggingTask> getTaggingTask();
 
   Future<void> submitTaggingTask(TaggingTaskResult result) async {}
+  Future<bool> checkDatasetConnection(int datasetId);
 }

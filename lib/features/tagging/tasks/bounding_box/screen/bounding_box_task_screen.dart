@@ -19,7 +19,7 @@ class BoundingBoxTaskScreen extends StatelessWidget {
     return BlocProvider(
       create: (_) => BoundingBoxTaskCubit(
         datasetRepository: appLocator(),
-        labels: taggingState.dataset.availableLabels,
+        labels: taggingState.dataset!.availableLabels,
       ),
       child: BlocBuilder<BoundingBoxTaskCubit, BoundingBoxTaskState>(
         builder: (context, state) {

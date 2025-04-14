@@ -1,3 +1,4 @@
 enum TaggingTaskType {
-  boundingBox;
+  boundingBox,
+  wordTagging;
 }

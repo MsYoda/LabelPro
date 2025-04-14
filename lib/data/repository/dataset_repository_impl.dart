@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:label_pro_client/data/providers/label_pro_api_service.dart';
 import 'package:label_pro_client/data/providers/shared_preference_service.dart';
 import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
 import 'package:label_pro_client/domain/models/dataset.dart';
 import 'package:label_pro_client/domain/models/tagging_task.dart';
 import 'package:label_pro_client/domain/models/tagging_task_result.dart';
@@ -23,9 +24,12 @@ class DatasetRepositoryImpl implements DatasetRepository {
   }
 
   @override
-  Future<TaggingTask> getTaggingTask({required int datasetId}) async {
+  Future<TaggingTask> getTaggingTask() async {
     try {
-      final result = await _apiService.getTaggingTask(datasetId);
+      final settings = AppSettings.fromJson(
+        await _preferenceService.readData('settings'),
+      );
+      final result = await _apiService.getTaggingTask(settings.datasetId);
       return result;
     } on DioException catch (e) {
       print(e.response?.statusCode);
@@ -39,5 +43,15 @@ class DatasetRepositoryImpl implements DatasetRepository {
   @override
   Future<void> submitTaggingTask(TaggingTaskResult result) {
     return _apiService.submitTaggingTask(result);
+  }
+
+  @override
+  Future<bool> checkDatasetConnection(int datasetId) async {
+    try {
+      await _apiService.getDatasetById(datasetId);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

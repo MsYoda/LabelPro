@@ -16,6 +16,8 @@ class TaggingScreen extends StatelessWidget {
     return BlocProvider(
       create: (_) => TaggingCubit(
         datasetRepository: appLocator(),
+        settingsRepository: appLocator(),
+        appRouter: appLocator(),
       ),
       child: BlocBuilder<TaggingCubit, TaggingState>(
         builder: (context, state) {

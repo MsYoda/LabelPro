@@ -62,8 +62,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.home_repair_service_outlined,
                 ),
                 MenuButton(
-                  isSelected: false,
-                  onPressed: () {},
+                  isSelected: _currentRootName == SettingsRoute.name,
+                  onPressed: () {
+                    setState(() {
+                      _currentRootName = SettingsRoute.name;
+                    });
+                    context.navigateTo(SettingsRoute());
+                  },
                   title: 'Settings',
                   icon: Icons.bar_chart,
                 ),

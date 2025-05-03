@@ -25,7 +25,11 @@ class WordMarkerTaskContent extends StatelessWidget {
     showMenu(
       context: context,
       position: RelativeRect.fromLTRB(
-          localPosition.dx, localPosition.dy, localPosition.dx + 1, localPosition.dy + 1),
+        localPosition.dx,
+        localPosition.dy,
+        localPosition.dx + 1,
+        localPosition.dy + 1,
+      ),
       items: [
         PopupMenuItem(
           child: Text(
@@ -50,7 +54,7 @@ class WordMarkerTaskContent extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 8),
-              Text('None')
+              Text('Удалить')
             ],
           ),
         ),
@@ -90,7 +94,7 @@ class WordMarkerTaskContent extends StatelessWidget {
                   : state.isDatasetEmpty
                       ? Center(
                           child: Text(
-                            'Dataset is over, you can select another in settings',
+                            'Все элементы датасета размечены, вы можете выбрать другой в настройках',
                           ),
                         )
                       : Container(
@@ -108,7 +112,7 @@ class WordMarkerTaskContent extends StatelessWidget {
                           child: ListView(
                             children: [
                               Text(
-                                'Tap on word and choose label',
+                                'Нажмите на слово и выберите метку',
                                 style: TextStyle(
                                   color: Colors.black,
                                   fontSize: 22,
@@ -117,7 +121,7 @@ class WordMarkerTaskContent extends StatelessWidget {
                               ),
                               SizedBox(height: 24),
                               Text(
-                                'Legend',
+                                'Легенда',
                                 style: TextStyle(
                                   color: Colors.black,
                                   fontSize: 20,
@@ -125,11 +129,15 @@ class WordMarkerTaskContent extends StatelessWidget {
                                 ),
                               ),
                               SizedBox(height: 8),
-                              for (var i = 0; i < state.availableLabels.length; i++)
+                              for (var i = 0;
+                                  i < state.availableLabels.length;
+                                  i++)
                                 LabelRow(
-                                  color: state.colors[state.availableLabels[i].id]!,
+                                  color: state
+                                      .colors[state.availableLabels[i].id]!,
                                   label: state.availableLabels[i],
-                                  style: TextStyle(color: Colors.black, fontSize: 22),
+                                  style: TextStyle(
+                                      color: Colors.black, fontSize: 22),
                                 ),
                               SizedBox(height: 24),
                               RichText(
@@ -144,7 +152,8 @@ class WordMarkerTaskContent extends StatelessWidget {
                                             onTapDown: (details) {
                                               _showMenu(
                                                 context: context,
-                                                position: details.globalPosition,
+                                                position:
+                                                    details.globalPosition,
                                                 wordIndex: i,
                                               );
                                             },
@@ -153,9 +162,13 @@ class WordMarkerTaskContent extends StatelessWidget {
                                               children: [
                                                 Container(
                                                   decoration: BoxDecoration(
-                                                    color: state.colors[state.markedWords[i]?.id]
-                                                        ?.withValues(alpha: 0.3),
-                                                    borderRadius: BorderRadius.circular(6),
+                                                    color: state.colors[state
+                                                            .markedWords[i]?.id]
+                                                        ?.withValues(
+                                                            alpha: 0.3),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
                                                   ),
                                                   child: Text(
                                                     state.words[i].data,

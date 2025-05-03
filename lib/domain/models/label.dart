@@ -7,6 +7,14 @@ class Label {
     required this.name,
   });
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Label && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
   factory Label.fromJson(Map<String, dynamic> json) {
     return Label(
       id: json['id'] as int,

@@ -20,7 +20,7 @@ class BoundingBoxContainer extends StatefulWidget {
   });
 
   final Color color;
-  final BoundingBox box;
+  final Polygon box;
   final double zoom;
   final bool isEditing;
   final bool isDragged;

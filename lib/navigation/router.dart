@@ -29,6 +29,7 @@ class AppRouter extends RootStackRouter {
             ),
             CustomRoute(
               page: SettingsRoute.page,
+              maintainState: false,
               durationInMilliseconds: 0,
             ),
           ],

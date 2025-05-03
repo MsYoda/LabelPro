@@ -1,4 +1,6 @@
 enum TaggingTaskType {
   boundingBox,
-  wordTagging;
+  wordTagging,
+  polygons,
+  custom;
 }

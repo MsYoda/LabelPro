@@ -1,3 +1,4 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core_ui/submit_button.dart';
@@ -49,7 +50,7 @@ class _SettingsContentState extends State<SettingsContent> {
           children: [
             SizedBox(height: 16),
             Text(
-              'Settings',
+              'Настройки',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
             ),
             SizedBox(height: 24),
@@ -74,7 +75,7 @@ class _SettingsContentState extends State<SettingsContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Dataset access',
+                        'Доступ к датасету',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -88,8 +89,8 @@ class _SettingsContentState extends State<SettingsContent> {
                             child: TextField(
                               controller: cubit.serverAddressController,
                               decoration: _inputDecoration(
-                                labelText: 'Host address',
-                                hintText: 'Enter IP address',
+                                labelText: 'Адрес хоста',
+                                hintText: 'Введите IP адресс',
                               ),
                             ),
                           ),
@@ -100,8 +101,8 @@ class _SettingsContentState extends State<SettingsContent> {
                             child: TextField(
                               controller: cubit.serverPortController,
                               decoration: _inputDecoration(
-                                labelText: 'Host port',
-                                hintText: 'Enter number',
+                                labelText: 'Порт хоста',
+                                hintText: 'Введите число',
                               ),
                               keyboardType: TextInputType.number,
                             ),
@@ -112,8 +113,8 @@ class _SettingsContentState extends State<SettingsContent> {
                       TextField(
                         controller: cubit.datasetIdController,
                         decoration: _inputDecoration(
-                          labelText: 'Dataset ID',
-                          hintText: 'Enter number',
+                          labelText: 'Идентифкатор датасета',
+                          hintText: 'Введите число',
                         ),
                         keyboardType: TextInputType.number,
                       ),
@@ -123,13 +124,15 @@ class _SettingsContentState extends State<SettingsContent> {
                         child: SizedBox(
                           width: 150,
                           child: SubmitButton(
-                            text: 'Test connection',
+                            text: 'Проверить соединение',
                             isLoading: widget.state.serverTestInProgress,
                             onPressed: () {
                               cubit.testSeverConfig(
                                 serverIp: cubit.serverAddressController.text,
-                                port: int.parse(cubit.serverPortController.text),
-                                datasetId: int.parse(cubit.datasetIdController.text),
+                                port:
+                                    int.parse(cubit.serverPortController.text),
+                                datasetId:
+                                    int.parse(cubit.datasetIdController.text),
                               );
                             },
                           ),
@@ -138,7 +141,7 @@ class _SettingsContentState extends State<SettingsContent> {
                       SizedBox(height: 8),
                       if (widget.state.serverAvailable ?? false)
                         Text(
-                          'Dataset connection is established!',
+                          'Датасет доступен для разметки!',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -147,7 +150,7 @@ class _SettingsContentState extends State<SettingsContent> {
                         ),
                       if (widget.state.serverAvailable == false)
                         Text(
-                          'Error while connecting to dataset!',
+                          'Ошибка при подключении к датасету!',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -176,7 +179,7 @@ class _SettingsContentState extends State<SettingsContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'User authorization',
+                        'Авторизация',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -187,16 +190,16 @@ class _SettingsContentState extends State<SettingsContent> {
                       TextField(
                         controller: cubit.usernameController,
                         decoration: _inputDecoration(
-                          labelText: 'Login',
-                          hintText: 'Enter login',
+                          labelText: 'Имя пользователя',
+                          hintText: 'Введите имя пользователя',
                         ),
                       ),
                       SizedBox(height: 16),
                       TextField(
                         controller: cubit.passwordController,
                         decoration: _inputDecoration(
-                          labelText: 'Password',
-                          hintText: 'Enter password',
+                          labelText: 'Пароль',
+                          hintText: 'Введите пароль',
                         ),
                         obscureText: true,
                       ),
@@ -206,13 +209,33 @@ class _SettingsContentState extends State<SettingsContent> {
                         child: SizedBox(
                           width: 150,
                           child: SubmitButton(
-                            text: 'Sign in',
+                            text: 'Авторизоваться',
+                            isLoading: widget.state.authInProgress,
                             onPressed: () {
-                              // TODO: sign-in logic
+                              cubit.signIn();
                             },
                           ),
                         ),
                       ),
+                      SizedBox(height: 8),
+                      if (widget.state.authSucceded ?? false)
+                        Text(
+                          'Авторизация прошла успешно',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green,
+                          ),
+                        ),
+                      if (widget.state.authSucceded == false)
+                        Text(
+                          'Введены неправильные данные',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.red,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -225,7 +248,7 @@ class _SettingsContentState extends State<SettingsContent> {
                 onPressed: () {
                   cubit.updateSettings();
                 },
-                text: 'Save',
+                text: 'Сохранить',
               ),
             ),
             SizedBox(height: 24),

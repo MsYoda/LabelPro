@@ -24,4 +24,12 @@ class SharedPreferenceService {
     }
     return jsonDecode(resultJson);
   }
+
+  Future<bool> containKey(String key) async {
+    return _sharedPreferences.containsKey(key);
+  }
+
+  Future<void> removeData(String key) async {
+    await _sharedPreferences.remove(key);
+  }
 }

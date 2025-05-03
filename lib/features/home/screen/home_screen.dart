@@ -1,5 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:label_pro_client/navigation/router.gr.dart';
 
 import '../../tagging/widgets/menu_button.dart';
@@ -17,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print(MediaQuery.sizeOf(context));
     return Material(
       color: Colors.white,
       child: Row(
@@ -58,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                     context.navigateTo(TaggingRoute());
                   },
-                  title: 'Tagging',
+                  title: 'Разметка',
                   icon: Icons.home_repair_service_outlined,
                 ),
                 MenuButton(
@@ -69,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                     context.navigateTo(SettingsRoute());
                   },
-                  title: 'Settings',
+                  title: 'Настройки',
                   icon: Icons.bar_chart,
                 ),
                 SizedBox(height: 12),
@@ -79,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: AutoRouter(),
+              child: AutoTabsRouter(),
             ),
           ),
         ],

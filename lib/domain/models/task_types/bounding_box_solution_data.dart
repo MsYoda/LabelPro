@@ -1,7 +1,7 @@
 import 'package:label_pro_client/domain/models/bounding_box.dart';
 
 class BoundingBoxTaskResultData {
-  final List<BoundingBox> boxes;
+  final List<Polygon> boxes;
 
   const BoundingBoxTaskResultData({
     required this.boxes,

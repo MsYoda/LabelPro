@@ -1,14 +1,33 @@
+import 'dart:async';
+
 import 'package:label_pro_client/domain/models/app_settings.dart';
 import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:rxdart/rxdart.dart';
 
+import '../../domain/models/settings_change.dart';
 import '../providers/shared_preference_service.dart';
 
 class SettingsRepositoryImpl implements SettingsRepository {
   final SharedPreferenceService _preferenceService;
+  final StreamController<SettingsChange> _appSettingsController = BehaviorSubject<SettingsChange>();
 
   SettingsRepositoryImpl({
     required SharedPreferenceService preferenceService,
-  }) : _preferenceService = preferenceService;
+  }) : _preferenceService = preferenceService {
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final setting = await readSettings();
+      _appSettingsController.add(SettingsChange(
+        oldData: null,
+        newData: setting,
+      ));
+    } catch (e) {
+      // pass
+    }
+  }
 
   Future<AppSettings> _createAppSettings() async {
     final settings = AppSettings.empty();
@@ -31,9 +50,20 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> updateSettings(AppSettings settings) async {
+    _appSettingsController.add(
+      SettingsChange(
+        oldData: await readSettings(),
+        newData: settings,
+      ),
+    );
     await _preferenceService.writeData(
       'settings',
       settings.toJson(),
     );
+  }
+
+  @override
+  Stream<SettingsChange> watchSettings() {
+    return _appSettingsController.stream;
   }
 }

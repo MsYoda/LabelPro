@@ -6,6 +6,7 @@ import 'label.dart';
 class Dataset {
   final int id;
   final String name;
+  final String? helperText;
   final List<Label> availableLabels;
   final TaggingTaskType tasksType;
 
@@ -14,16 +15,19 @@ class Dataset {
     required this.availableLabels,
     required this.tasksType,
     required this.name,
+    this.helperText,
   });
 
   factory Dataset.fromJson(Map<String, dynamic> json) {
     return Dataset(
       id: json['id'] as int,
+      helperText: json['helperText'] as String?,
       name: json['name'] as String,
       availableLabels: (json['availableLabels'] as List<dynamic>)
           .map((label) => Label.fromJson(label as Map<String, dynamic>))
           .toList(),
-      tasksType: TaggingTaskType.values.byName((json['tasksType'] as String).toCamelCase()),
+      tasksType: TaggingTaskType.values
+          .byName((json['tasksType'] as String).toCamelCase()),
     );
   }
 }

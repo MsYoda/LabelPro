@@ -1,3 +1,4 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core/core.dart';
@@ -5,8 +6,6 @@ import 'package:label_pro_client/domain/models/app_settings.dart';
 import 'package:label_pro_client/domain/repository/dataset_repository.dart';
 import 'package:label_pro_client/domain/repository/settings_repository.dart';
 import 'package:label_pro_client/features/settings/bloc/settings_state.dart';
-import 'package:label_pro_client/navigation/router.dart';
-import 'package:label_pro_client/navigation/router.gr.dart';
 
 class SettingsCubit extends Cubit<SettingsState> {
   final SettingsRepository _settingsRepository;
@@ -82,6 +81,47 @@ class SettingsCubit extends Cubit<SettingsState> {
         serverTestInProgress: false,
       ),
     );
+    await _settingsRepository.updateSettings(
+      newSettings,
+    );
+  }
+
+  Future<void> signIn() async {
+    try {
+      emit(state.copyWith(
+        authInProgress: true,
+        authSucceded: () => null,
+      ));
+      await _datasetRepository.confirmDatasetAuthentication(
+        name: usernameController.text,
+        password: passwordController.text,
+      );
+
+      emit(
+        state.copyWith(
+          authInProgress: false,
+          authSucceded: () => true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          authInProgress: false,
+          authSucceded: () => false,
+        ),
+      );
+    } finally {
+      final newSettings = state.appSettings.copyWith(
+        username: usernameController.text,
+        password: passwordController.text,
+      );
+      await _settingsRepository.updateSettings(
+        newSettings,
+      );
+      emit(
+        state.copyWith(appSettings: newSettings),
+      );
+    }
   }
 
   Future<void> updateSettings() async {
@@ -96,6 +136,5 @@ class SettingsCubit extends Cubit<SettingsState> {
     await _settingsRepository.updateSettings(
       newSettings,
     );
-    appLocator<AppRouter>().replaceAll([SettingsRoute()]);
   }
 }

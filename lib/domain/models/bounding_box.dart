@@ -2,20 +2,20 @@ import 'dart:ui';
 
 import 'label.dart';
 
-class BoundingBox {
+class Polygon {
   final Rect box;
   final Label label;
 
-  const BoundingBox({
+  const Polygon({
     required this.box,
     required this.label,
   });
 
-  BoundingBox copyWith({
+  Polygon copyWith({
     Rect? box,
     Label? label,
   }) {
-    return BoundingBox(
+    return Polygon(
       box: box ?? this.box,
       label: label ?? this.label,
     );

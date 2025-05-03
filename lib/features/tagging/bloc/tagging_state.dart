@@ -15,12 +15,12 @@ class TaggingState {
   });
 
   TaggingState copyWith({
-    Dataset? dataset,
+    Dataset? Function()? dataset,
     bool? isLoading,
   }) {
     return TaggingState(
       isLoading: isLoading ?? this.isLoading,
-      dataset: dataset ?? this.dataset,
+      dataset: dataset != null ? dataset() : this.dataset,
     );
   }
 }

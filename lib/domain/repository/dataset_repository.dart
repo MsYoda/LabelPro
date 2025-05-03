@@ -9,4 +9,9 @@ abstract interface class DatasetRepository {
 
   Future<void> submitTaggingTask(TaggingTaskResult result) async {}
   Future<bool> checkDatasetConnection(int datasetId);
+  Future<void> confirmDatasetAuthentication({
+    required String name,
+    required String password,
+  });
+  Future<bool> isAuthenticated();
 }

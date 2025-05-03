@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
 import 'package:label_pro_client/domain/exceptions/exceptions.dart';
 import 'package:label_pro_client/domain/models/bounding_box.dart';
@@ -7,6 +8,7 @@ import 'package:label_pro_client/domain/models/label.dart';
 import 'package:label_pro_client/domain/models/tagging_task_result.dart';
 import 'package:label_pro_client/domain/models/task_types/bounding_box_solution_data.dart';
 import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
 
 part 'bounding_box_task_state.dart';
 
@@ -26,23 +28,25 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
   }
 
   Future<void> _init() async {
+    print('_init');
     final labels = state.availableLabels;
     emit(
       BoundingBoxTaskState.initial(
         availableLabels: labels,
         isTaskLoading: true,
+        selectedClassId: state.selectedClassId,
       ),
     );
     try {
       final task = await _datasetRepository.getTaggingTask();
 
       final size = await getImageSize(
-        buildUrl(task.data),
+        buildFileUrl(task.data),
       );
       emit(
         state.copyWith(
           size: size,
-          imageUrl: buildUrl(task.data),
+          imageUrl: buildFileUrl(task.data),
           isTaskLoading: false,
           idInFile: task.idInFile,
           filename: task.filename,
@@ -85,7 +89,7 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
       state.copyWith(
         boxes: [
           ...state.boxes,
-          BoundingBox(
+          Polygon(
             box: _resizeToImageSize(
               rect: rect,
               originalSize: size,
@@ -214,11 +218,12 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
         boxes: state.boxes,
       ).toJson(),
     );
+    final settings = await appLocator<SettingsRepository>().readSettings();
     await _datasetRepository.submitTaggingTask(
       TaggingTaskResult(
         filename: state.filename,
         idInFile: state.idInFile,
-        datasetId: 1,
+        datasetId: settings.datasetId,
         data: BoundingBoxTaskResultData(
           boxes: state.boxes,
         ).toJson(),

@@ -5,7 +5,7 @@ class BoundingBoxTaskState {
   final String filename;
   final String idInFile;
   final List<Label> availableLabels;
-  final List<BoundingBox> boxes;
+  final List<Polygon> boxes;
   final int creatingBoxIndex;
   final List<int> editingBoxIndexes;
   final int selectedClassId;
@@ -49,7 +49,7 @@ class BoundingBoxTaskState {
     String? filename,
     String? idInFile,
     List<Label>? availableLabels,
-    List<BoundingBox>? boxes,
+    List<Polygon>? boxes,
     int? creatingBoxIndex,
     List<int>? editingBoxIndexes,
     int? selectedClassId,

@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/core_ui/theme/app_colors.dart';
 import 'package:label_pro_client/domain/exceptions/exceptions.dart';
 import 'package:label_pro_client/domain/models/label.dart';
 import 'package:label_pro_client/domain/models/tagging_task_result.dart';
 import 'package:label_pro_client/domain/models/task_types/word_tagging_solution_data.dart';
 import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
 import 'package:label_pro_client/features/tagging/tasks/word_marker/bloc/word_marker_task_state.dart';
 import 'package:label_pro_client/features/tagging/tasks/word_marker/model/word.dart';
 
@@ -107,18 +109,26 @@ class WordMarkerTaskCubit extends Cubit<WordMarkerTaskState> {
         ).toJson(),
       ),
     );
-    await _datasetRepository.submitTaggingTask(
-      TaggingTaskResult(
-        filename: state.filename,
-        idInFile: state.idInFile,
-        datasetId: 2,
-        data: WordTaggingSolutionData(
-          markedWords: state.markedWords.map(
-            (key, value) => MapEntry(key, value.name),
-          ),
-        ).toJson(),
-      ),
-    );
-    _init();
+    final settings = await appLocator<SettingsRepository>().readSettings();
+    try {
+      await _datasetRepository.submitTaggingTask(
+        TaggingTaskResult(
+          filename: state.filename,
+          idInFile: state.idInFile,
+          datasetId: settings.datasetId,
+          data: WordTaggingSolutionData(
+            markedWords: state.markedWords.map(
+              (key, value) => MapEntry(key, value.name),
+            ),
+          ).toJson(),
+        ),
+      );
+      _init();
+    } on DatasetIsEmpty {
+      emit(state.copyWith(
+        isDatasetEmpty: true,
+        isLoading: false,
+      ));
+    }
   }
 }

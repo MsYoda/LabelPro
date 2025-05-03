@@ -15,28 +15,36 @@ class SubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.blue,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 12,
-          )
-        ],
-      ),
-      child: TextButton(
-        onPressed: onPressed,
-        child: isLoading
-            ? CupertinoActivityIndicator(
-                color: Colors.white,
-              )
-            : Text(
-                text ?? 'Submit',
-                style: TextStyle(color: Colors.white),
-              ),
+    return Material(
+      type: MaterialType.transparency,
+      child: Ink(
+        height: 48,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.blue,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 12,
+            )
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onPressed,
+          splashColor: Colors.white.withValues(alpha: 0.15),
+          child: Center(
+            child: isLoading
+                ? CupertinoActivityIndicator(
+                    color: Colors.white,
+                  )
+                : Text(
+                    textAlign: TextAlign.center,
+                    text ?? 'Завершить',
+                    style: TextStyle(color: Colors.white),
+                  ),
+          ),
+        ),
       ),
     );
   }

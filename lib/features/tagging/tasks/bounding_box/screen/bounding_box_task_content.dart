@@ -40,7 +40,7 @@ class BoundingBoxTaskContent extends StatelessWidget {
                         children: [
                           SizedBox(height: 8),
                           Text(
-                            'Select label type and start tagging',
+                            'Выберите тип метки и начните разметку',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 20,
@@ -57,7 +57,7 @@ class BoundingBoxTaskContent extends StatelessWidget {
                               if (state.isDatasetEmpty) {
                                 return Center(
                                   child: Text(
-                                    'Dataset is over, you can select another in settings',
+                                    'Все элементы датасета размечены, вы можете выбрать другой в настройках',
                                   ),
                                 );
                               }
@@ -84,7 +84,8 @@ class BoundingBoxTaskContent extends StatelessWidget {
                       cubit.clearEditBoundingBox();
                     },
                     child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+                      padding:
+                          EdgeInsets.symmetric(vertical: 24, horizontal: 24),
                       child: LayoutBuilder(builder: (context, constraints) {
                         return SizedBox(
                           height: constraints.maxHeight,
@@ -95,7 +96,8 @@ class BoundingBoxTaskContent extends StatelessWidget {
                                 flex: 1,
                                 child: AvailableLabelsList(
                                   state: state,
-                                  onPressed: (index) => cubit.changeSelectedClassId(
+                                  onPressed: (index) =>
+                                      cubit.changeSelectedClassId(
                                     state.availableLabels[index].id,
                                   ),
                                 ),
@@ -106,9 +108,12 @@ class BoundingBoxTaskContent extends StatelessWidget {
                                 child: TaggedLabelsList(
                                   state: state,
                                   onClearSelection: cubit.clearEditBoundingBox,
-                                  onEditPressed: () => cubit.updateEditAll(!state.isEditAllEnabled),
-                                  onLabelPressed: (index) => cubit.editBoundingBox(index),
-                                  onLabelRemoved: (index) => cubit.removeBoundingBox(index),
+                                  onEditPressed: () => cubit
+                                      .updateEditAll(!state.isEditAllEnabled),
+                                  onLabelPressed: (index) =>
+                                      cubit.editBoundingBox(index),
+                                  onLabelRemoved: (index) =>
+                                      cubit.removeBoundingBox(index),
                                 ),
                               ),
                             ],
@@ -159,7 +164,7 @@ class AvailableLabelsList extends StatelessWidget {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 15),
             child: Text(
-              'Available labels',
+              'Тип меток',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -173,7 +178,8 @@ class AvailableLabelsList extends StatelessWidget {
               itemBuilder: (context, index) {
                 return LabelListTile(
                   label: state.availableLabels[index],
-                  isSelected: state.availableLabels[index].id == state.selectedClassId,
+                  isSelected:
+                      state.availableLabels[index].id == state.selectedClassId,
                   color: AppColors.accentColorFromIndex(index),
                   onPressed: () => onPressed(index),
                 );
@@ -227,7 +233,7 @@ class TaggedLabelsList extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  'Labels list',
+                  'Список меток',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -251,7 +257,8 @@ class TaggedLabelsList extends StatelessWidget {
                 ),
                 Material(
                   shape: CircleBorder(),
-                  color: state.isEditAllEnabled ? colors.primary : colors.surface,
+                  color:
+                      state.isEditAllEnabled ? colors.primary : colors.surface,
                   child: InkWell(
                     onTap: onEditPressed,
                     customBorder: CircleBorder(),
@@ -260,7 +267,9 @@ class TaggedLabelsList extends StatelessWidget {
                       child: Icon(
                         Icons.select_all,
                         size: 18,
-                        color: state.isEditAllEnabled ? colors.onPrimary : colors.onSurface,
+                        color: state.isEditAllEnabled
+                            ? colors.onPrimary
+                            : colors.onSurface,
                       ),
                     ),
                   ),

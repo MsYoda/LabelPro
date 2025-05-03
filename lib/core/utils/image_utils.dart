@@ -3,8 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:http/http.dart' as http;
 
-String buildUrl(String filePath) {
-  return 'http://localhost:8080/file?file_path=$filePath';
+String buildFileUrl(String filePath) {
+  return 'http://localhost:8080/file/?file_path=$filePath';
 }
 
 Future<ui.Size> getImageSize(String imageUrl) async {
@@ -25,4 +25,9 @@ Future<ui.Size> getImageSize(String imageUrl) async {
   } catch (e) {
     rethrow;
   }
+}
+
+String getFileExtension(String filePath) {
+  String extension = filePath.split('.').last;
+  return extension;
 }

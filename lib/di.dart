@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/data/api_core/api_provider.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_refresher.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_storage.dart';
 import 'package:label_pro_client/data/providers/label_pro_api_service.dart';
 import 'package:label_pro_client/data/providers/shared_preference_service.dart';
 import 'package:label_pro_client/data/repository/dataset_repository_impl.dart';
@@ -19,16 +21,32 @@ abstract class Di {
     final sharedPreferences = await SharedPreferences.getInstance();
     appLocator.registerSingleton<SharedPreferences>(sharedPreferences);
 
-    appLocator.registerSingleton<ApiProvider>(ApiProvider(
-      dio: appLocator(),
-    ));
-
-    appLocator.registerSingleton<LabelProApiService>(LabelProApiService(
-      apiProvider: appLocator(),
+    appLocator.registerSingleton<SharedPreferenceService>(SharedPreferenceService(
       sharedPreferences: appLocator(),
     ));
 
-    appLocator.registerSingleton<SharedPreferenceService>(SharedPreferenceService(
+    appLocator.registerSingleton<AccessTokenStorage>(
+      AccessTokenStorage(
+        sharedPreferenceService: appLocator(),
+      ),
+    );
+    appLocator.registerSingleton<AccessTokenRefresher>(
+      AccessTokenRefresher(
+        accessTokenStorage: appLocator(),
+        dio: appLocator(),
+      ),
+    );
+
+    appLocator.registerSingleton<ApiProvider>(
+      ApiProvider(
+        dio: appLocator(),
+        accessTokenRefresher: appLocator(),
+        accessTokenStorage: appLocator(),
+      ),
+    );
+
+    appLocator.registerSingleton<LabelProApiService>(LabelProApiService(
+      apiProvider: appLocator(),
       sharedPreferences: appLocator(),
     ));
 
@@ -36,6 +54,8 @@ abstract class Di {
       DatasetRepositoryImpl(
         apiService: appLocator(),
         preferenceService: appLocator(),
+        accessTokenStorage: appLocator(),
+        accessTokenRefresher: appLocator(),
       ),
     );
     appLocator.registerSingleton<SettingsRepository>(

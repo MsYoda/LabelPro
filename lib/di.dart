@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/data/api_core/api_provider.dart';
+import 'package:label_pro_client/data/api_core/server/server_address_storage.dart';
 import 'package:label_pro_client/data/api_core/token/access_token_refresher.dart';
 import 'package:label_pro_client/data/api_core/token/access_token_storage.dart';
 import 'package:label_pro_client/data/providers/label_pro_api_service.dart';
@@ -25,6 +26,11 @@ abstract class Di {
       sharedPreferences: appLocator(),
     ));
 
+    appLocator.registerSingleton<ServerAddressStorage>(
+      ServerAddressStorage(
+        sharedPreferenceService: appLocator(),
+      ),
+    );
     appLocator.registerSingleton<AccessTokenStorage>(
       AccessTokenStorage(
         sharedPreferenceService: appLocator(),
@@ -33,6 +39,7 @@ abstract class Di {
     appLocator.registerSingleton<AccessTokenRefresher>(
       AccessTokenRefresher(
         accessTokenStorage: appLocator(),
+        serverAddressStorage: appLocator(),
         dio: appLocator(),
       ),
     );
@@ -42,6 +49,7 @@ abstract class Di {
         dio: appLocator(),
         accessTokenRefresher: appLocator(),
         accessTokenStorage: appLocator(),
+        serverAddressStorage: appLocator(),
       ),
     );
 
@@ -61,6 +69,7 @@ abstract class Di {
     appLocator.registerSingleton<SettingsRepository>(
       SettingsRepositoryImpl(
         preferenceService: appLocator(),
+        serverAddressStorage: appLocator(),
       ),
     );
   }

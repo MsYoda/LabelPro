@@ -18,7 +18,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(MediaQuery.sizeOf(context));
     return Material(
       color: Colors.white,
       child: Row(

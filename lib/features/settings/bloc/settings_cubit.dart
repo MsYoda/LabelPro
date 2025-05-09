@@ -72,6 +72,10 @@ class SettingsCubit extends Cubit<SettingsState> {
     serverPortController.text = newSettings.servicePort.toString();
     datasetIdController.text = newSettings.datasetId.toString();
 
+    await _settingsRepository.updateSettings(
+      newSettings,
+    );
+
     final hasConnection = await _datasetRepository.checkDatasetConnection(newSettings.datasetId);
 
     emit(
@@ -80,9 +84,6 @@ class SettingsCubit extends Cubit<SettingsState> {
         serverAvailable: () => hasConnection,
         serverTestInProgress: false,
       ),
-    );
-    await _settingsRepository.updateSettings(
-      newSettings,
     );
   }
 

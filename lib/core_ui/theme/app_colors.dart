@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
+
 abstract class AppColors {
   static const Color blueR2 = Color(0xFF013386);
 
@@ -86,22 +88,9 @@ abstract class AppColors {
     red,
     orange,
     lime,
-    pink1,
-    red1,
-    orange1,
-    lime1,
-    pink2,
-    red2,
-    orange2,
-    lime2,
-    pinkR2,
-    redR2,
-    orangeR2,
-    limeR2,
-    pinkR1,
-    redR1,
-    orangeR1,
-    limeR1,
+    blue,
+    Colors.cyanAccent,
+    Colors.tealAccent,
   ];
 
   static Color accentColorFromIndex(int index) {

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:label_pro_client/data/api_core/server/server_address.dart';
+import 'package:label_pro_client/data/api_core/server/server_address_storage.dart';
 import 'package:label_pro_client/domain/models/app_settings.dart';
 import 'package:label_pro_client/domain/repository/settings_repository.dart';
 import 'package:rxdart/rxdart.dart';
@@ -9,11 +11,14 @@ import '../providers/shared_preference_service.dart';
 
 class SettingsRepositoryImpl implements SettingsRepository {
   final SharedPreferenceService _preferenceService;
+  final ServerAddressStorage _serverAddressStorage;
   final StreamController<SettingsChange> _appSettingsController = BehaviorSubject<SettingsChange>();
 
   SettingsRepositoryImpl({
     required SharedPreferenceService preferenceService,
-  }) : _preferenceService = preferenceService {
+    required ServerAddressStorage serverAddressStorage,
+  })  : _serverAddressStorage = serverAddressStorage,
+        _preferenceService = preferenceService {
     _init();
   }
 
@@ -50,15 +55,22 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<void> updateSettings(AppSettings settings) async {
-    _appSettingsController.add(
-      SettingsChange(
-        oldData: await readSettings(),
-        newData: settings,
-      ),
-    );
+    final oldSettings = await readSettings();
     await _preferenceService.writeData(
       'settings',
       settings.toJson(),
+    );
+    await _serverAddressStorage.writeAddress(
+      ServerAddress(
+        ip: settings.serverAddress,
+        port: settings.servicePort,
+      ),
+    );
+    _appSettingsController.add(
+      SettingsChange(
+        oldData: oldSettings,
+        newData: settings,
+      ),
     );
   }
 

@@ -15,7 +15,7 @@ class AppSettings {
 
   const AppSettings.empty({
     this.serverAddress = 'localhost',
-    this.servicePort = 80,
+    this.servicePort = 8080,
     this.username = '',
     this.password = '',
     this.datasetId = 0,

@@ -3,10 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
 import 'package:label_pro_client/domain/exceptions/exceptions.dart';
-import 'package:label_pro_client/domain/models/bounding_box.dart';
 import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/polygon.dart';
 import 'package:label_pro_client/domain/models/tagging_task_result.dart';
-import 'package:label_pro_client/domain/models/task_types/bounding_box_solution_data.dart';
+import 'package:label_pro_client/domain/models/task_types/polygon_solution_data.dart';
 import 'package:label_pro_client/domain/repository/dataset_repository.dart';
 import 'package:label_pro_client/domain/repository/settings_repository.dart';
 
@@ -28,7 +28,6 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
   }
 
   Future<void> _init() async {
-    print('_init');
     final labels = state.availableLabels;
     emit(
       PolygonTaskState.initial(
@@ -81,94 +80,63 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
     );
   }
 
-  void createBoundingBox(
-    Rect rect,
+  void createPolygon(
+    List<Offset> points,
     Size size,
   ) {
     emit(
       state.copyWith(
-        polygons: [
-          ...state.polygons,
-          Polygon(
-            box: _resizeToImageSize(
-              rect: rect,
-              originalSize: size,
+        polygons: state.polygons
+          ..add(
+            Polygon(
+              points: points,
+              label: state.availableLabels[state.selectedClassId],
             ),
-            label: Label(
-              id: state.selectedClassId,
-              name: state.availableLabels
-                      .where((e) => e.id == state.selectedClassId)
-                      .firstOrNull
-                      ?.name ??
-                  '',
-            ),
-          )
-        ],
+          ),
       ),
     );
   }
 
-  void updateBoundingBoxPosition({
+  void updatePolygons(List<Polygon> polygons) {
+    emit(state.copyWith(polygons: polygons));
+  }
+
+  void updatePolyPointPosition({
     required Offset offset,
     required int index,
-    required double zoom,
+    required int pointIndex,
     required Size size,
   }) {
-    if (index >= state.polygons.length) {
-      return;
-    }
-    final oldBox = state.polygons.removeAt(index);
-    final newBox = Rect.fromLTRB(
-      oldBox.box.left * zoom + offset.dx,
-      oldBox.box.top * zoom + offset.dy,
-      oldBox.box.right * zoom + offset.dx,
-      oldBox.box.bottom * zoom + offset.dy,
-    );
+    final updatedPolygons = [...state.polygons];
+    updatedPolygons[index].points[pointIndex] = offset;
 
     emit(
       state.copyWith(
-        polygons: [...state.polygons]..insert(
-            index,
-            oldBox.copyWith(
-              box: _resizeToImageSize(
-                rect: newBox,
-                originalSize: size,
-              ),
-            ),
-          ),
+        polygons: updatedPolygons,
       ),
     );
   }
 
-  void updateBoundingBoxSize({
-    required Rect newPosition,
+  void addPointToPolygon({
+    required Offset point,
     required int index,
-    required Size size,
+    required int polyIndex,
   }) {
-    if (index >= state.polygons.length) {
-      return;
-    }
-
-    final box = state.polygons[index];
+    final updatedPolygons = [...state.polygons];
+    final points = updatedPolygons[index].points;
+    points.insert(index, point);
+    final oldPoly = updatedPolygons.removeAt(polyIndex);
+    updatedPolygons.insert(
+      polyIndex,
+      Polygon(points: points, label: oldPoly.label),
+    );
 
     emit(
-      state.copyWith(
-        polygons: [...state.polygons]
-          ..removeAt(index)
-          ..insert(
-            index,
-            box.copyWith(
-              box: _resizeToImageSize(
-                rect: newPosition,
-                originalSize: size,
-              ),
-            ),
-          ),
-      ),
+      state.copyWith(polygons: updatedPolygons),
     );
   }
 
-  void editBoundingBox(int index) {
+  void editPolygon(int index) {
     emit(
       state.copyWith(
         editingPolygonsIndexes: [index],
@@ -176,7 +144,7 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
     );
   }
 
-  void clearEditBoundingBox() {
+  void clearEditPolygon() {
     emit(
       state.copyWith(
         editingPolygonsIndexes: [],
@@ -184,7 +152,7 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
     );
   }
 
-  void removeBoundingBox(int index) {
+  void removePolygon(int index) {
     emit(
       state.copyWith(
         polygons: state.polygons..removeAt(index),
@@ -212,20 +180,14 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
   }
 
   Future<void> submitTask() async {
-    print(
-      BoundingBoxTaskResultData(
-        boxes: state.polygons,
-      ).toJson(),
-    );
+    print(state.polygons.first.points);
     final settings = await appLocator<SettingsRepository>().readSettings();
     await _datasetRepository.submitTaggingTask(
       TaggingTaskResult(
         filename: state.filename,
         idInFile: state.idInFile,
         datasetId: settings.datasetId,
-        data: BoundingBoxTaskResultData(
-          boxes: state.polygons,
-        ).toJson(),
+        data: PolygonSolutionData(polygons: state.polygons).toJson(),
       ),
     );
     _init();

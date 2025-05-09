@@ -5,6 +5,8 @@ import 'package:label_pro_client/domain/models/label.dart';
 
 import '../../../../../core_ui/submit_button.dart';
 import '../bloc/polygon_task_cubit.dart';
+import '../utils/polygon_utils.dart';
+import '../widgets/editable_polygons_view.dart';
 
 class PolygonTaskContent extends StatelessWidget {
   final PolygonTaskState state;
@@ -19,7 +21,7 @@ class PolygonTaskContent extends StatelessWidget {
     final cubit = context.read<PolygonTaskCubit>();
     return GestureDetector(
       onTap: () {
-        cubit.clearEditBoundingBox();
+        cubit.clearEditPolygon();
       },
       child: Container(
         color: Colors.transparent,
@@ -60,7 +62,15 @@ class PolygonTaskContent extends StatelessWidget {
                                   ),
                                 );
                               }
-                              return SizedBox();
+                              return MultiPolygonEditorWidget(
+                                imageUrl: state.imageUrl,
+                                polygons: state.polygons,
+                                onChanged: cubit.updatePolygons,
+                                activePolygonIndex: state.editingPolygonsIndexes.firstOrNull,
+                                onSetActivePolygon: (activePolygonIndex) {
+                                  cubit.editPolygon(activePolygonIndex);
+                                },
+                              );
                             }),
                           ),
                           SizedBox(height: 24),
@@ -80,7 +90,7 @@ class PolygonTaskContent extends StatelessWidget {
                   ),
                   GestureDetector(
                     onTap: () {
-                      cubit.clearEditBoundingBox();
+                      cubit.clearEditPolygon();
                     },
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 24, horizontal: 24),
@@ -104,10 +114,10 @@ class PolygonTaskContent extends StatelessWidget {
                                 flex: 2,
                                 child: TaggedLabelsList(
                                   state: state,
-                                  onClearSelection: cubit.clearEditBoundingBox,
+                                  onClearSelection: cubit.clearEditPolygon,
                                   onEditPressed: () => cubit.updateEditAll(!state.isEditAllEnabled),
-                                  onLabelPressed: (index) => cubit.editBoundingBox(index),
-                                  onLabelRemoved: (index) => cubit.removeBoundingBox(index),
+                                  onLabelPressed: (index) => cubit.editPolygon(index),
+                                  onLabelRemoved: (index) => cubit.removePolygon(index),
                                 ),
                               ),
                             ],
@@ -248,22 +258,6 @@ class TaggedLabelsList extends StatelessWidget {
                     ),
                   ),
                 ),
-                Material(
-                  shape: CircleBorder(),
-                  color: state.isEditAllEnabled ? colors.primary : colors.surface,
-                  child: InkWell(
-                    onTap: onEditPressed,
-                    customBorder: CircleBorder(),
-                    child: Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.select_all,
-                        size: 18,
-                        color: state.isEditAllEnabled ? colors.onPrimary : colors.onSurface,
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -272,13 +266,9 @@ class TaggedLabelsList extends StatelessWidget {
             child: ListView.builder(
               itemCount: state.polygons.length,
               itemBuilder: (BuildContext context, int index) {
-                Color color = AppColors.pink;
-                state.availableLabels.asMap().forEach(
-                  (key, value) {
-                    if (value.id == state.polygons[index].label.id) {
-                      color = AppColors.accentColorFromIndex(key);
-                    }
-                  },
+                Color color = getPolygonColor(
+                  avalibleLabels: state.availableLabels,
+                  currentLabel: state.polygons[index].label,
                 );
 
                 return LabelListTile(

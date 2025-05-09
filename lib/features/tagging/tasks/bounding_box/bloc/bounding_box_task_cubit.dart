@@ -89,7 +89,7 @@ class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
       state.copyWith(
         boxes: [
           ...state.boxes,
-          Polygon(
+          BoundingBox(
             box: _resizeToImageSize(
               rect: rect,
               originalSize: size,

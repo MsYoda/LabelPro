@@ -40,14 +40,14 @@ class TaggingCubit extends Cubit<TaggingState> {
         state.copyWith(isLoading: true),
       );
       final settings = await _settingsRepository.readSettings();
-      final Dataset dataset =
-          await _datasetRepository.getDatasetById(settings.datasetId);
+      final Dataset dataset = await _datasetRepository.getDatasetById(settings.datasetId);
       emit(
         state.copyWith(
           isLoading: false,
           dataset: () => dataset,
         ),
       );
+      print('DATASET LOADeD');
     } catch (e) {
       print(e);
       emit(

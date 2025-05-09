@@ -23,7 +23,7 @@ class LabelProApiService {
     final dataset = await _apiProvider.parsed(
       request: ApiRequest(
         method: HttpMethod.get,
-        url: 'http://localhost:8080/dataset/$id',
+        url: 'api/dataset/$id',
       ),
       parser: Dataset.fromJson,
     );
@@ -34,7 +34,7 @@ class LabelProApiService {
     final task = await _apiProvider.parsed(
       request: ApiRequest(
         method: HttpMethod.get,
-        url: 'http://localhost:8080/task/',
+        url: 'api/task/',
         params: {
           'dataset_id': datasetId,
         },
@@ -45,11 +45,10 @@ class LabelProApiService {
   }
 
   Future<void> submitTaggingTask(TaggingTaskResult result) async {
-    print(result.data);
     await _apiProvider.none(
       request: ApiRequest(
         method: HttpMethod.post,
-        url: 'http://localhost:8080/task/',
+        url: 'api/task/',
         body: FormData.fromMap(
           result.toJson(),
         ),
@@ -64,7 +63,7 @@ class LabelProApiService {
     final result = await _apiProvider.parsed(
       request: ApiRequest(
         method: HttpMethod.post,
-        url: 'http://localhost:8080/token/',
+        url: 'api/token/',
         body: FormData.fromMap({
           'username': name,
           'password': password,

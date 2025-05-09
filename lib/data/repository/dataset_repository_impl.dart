@@ -47,7 +47,6 @@ class DatasetRepositoryImpl implements DatasetRepository {
       final result = await _apiService.getTaggingTask(settings.datasetId);
       return result;
     } on DioException catch (e) {
-      print(e.response?.statusCode);
       if (e.response!.statusCode.toString() == '404') {
         throw DatasetIsEmpty();
       }

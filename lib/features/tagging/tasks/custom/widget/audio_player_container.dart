@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
 import 'package:path_provider/path_provider.dart';
 
 class AudioPlayerContainer extends StatefulWidget {
@@ -29,7 +31,14 @@ class _AudioPlayerContainerState extends State<AudioPlayerContainer> {
     player.setReleaseMode(ReleaseMode.stop);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final uri = Uri.parse(buildFileUrl(widget.filePath));
+      final appSettings = await appLocator<SettingsRepository>().readSettings();
+      final uri = Uri.parse(
+        buildFileUrl(
+          host: appSettings.serverAddress,
+          port: appSettings.servicePort,
+          filePath: widget.filePath,
+        ),
+      );
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {

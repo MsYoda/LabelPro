@@ -1,0 +1,2618 @@
+// core.dart
+import 'package:get_it/get_it.dart';
+
+final appLocator = GetIt.instance;
+
+
+// string_ext.dart
+extension StringExt on String {
+  String toCamelCase() {
+  final parts = split('_');
+  return parts.first + parts.skip(1).map((e) => e[0].toUpperCase() + e.substring(1)).join();
+  }
+}
+
+
+// bool_ext.dart
+extension BoolExt on bool {
+  int get value {
+  switch (this) {
+      case true:
+    return 1;
+      case false:
+    return 0;
+  }
+  }
+}
+
+
+// image_utils.dart
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:http/http.dart' as http;
+
+String buildFileUrl(String filePath) {
+  return 'http://localhost:8080/file/?file_path=$filePath';
+}
+
+Future<ui.Size> getImageSize(String imageUrl) async {
+  try {
+  final response = await http.get(Uri.parse(imageUrl));
+  print(imageUrl);
+  if (response.statusCode == 200) {
+      final codec = await ui.instantiateImageCodec(response.bodyBytes);
+      final frame = await codec.getNextFrame();
+
+      return ui.Size(
+    frame.image.width.toDouble(),
+    frame.image.height.toDouble(),
+      );
+  } else {
+      throw HttpException(response.statusCode.toString());
+  }
+  } catch (e) {
+  rethrow;
+  }
+}
+
+String getFileExtension(String filePath) {
+  String extension = filePath.split('.').last;
+  return extension;
+}
+
+
+
+########################################
+// dataset_repository_impl.dart
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_refresher.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_storage.dart';
+import 'package:label_pro_client/data/providers/label_pro_api_service.dart';
+import 'package:label_pro_client/data/providers/shared_preference_service.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
+import 'package:label_pro_client/domain/models/dataset.dart';
+import 'package:label_pro_client/domain/models/tagging_task.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:rxdart/rxdart.dart';
+
+import '../api_core/token/access_token_pair.dart';
+
+class DatasetRepositoryImpl implements DatasetRepository {
+  final SharedPreferenceService _preferenceService;
+  final AccessTokenStorage _accessTokenStorage;
+  final AccessTokenRefresher _accessTokenRefresher;
+  final LabelProApiService _apiService;
+
+  DatasetRepositoryImpl({
+  required AccessTokenStorage accessTokenStorage,
+  required AccessTokenRefresher accessTokenRefresher,
+  required SharedPreferenceService preferenceService,
+  required LabelProApiService apiService,
+  })  : _accessTokenRefresher = accessTokenRefresher,
+    _accessTokenStorage = accessTokenStorage,
+    _preferenceService = preferenceService,
+    _apiService = apiService;
+
+  @override
+  Future<Dataset> getDatasetById(int id) async {
+  return _apiService.getDatasetById(id);
+  }
+
+  @override
+  Future<TaggingTask> getTaggingTask() async {
+  try {
+      final settings = AppSettings.fromJson(
+    await _preferenceService.readData('settings'),
+      );
+      final result = await _apiService.getTaggingTask(settings.datasetId);
+      return result;
+  } on DioException catch (e) {
+      if (e.response!.statusCode.toString() == '404') {
+    throw DatasetIsEmpty();
+      }
+      rethrow;
+  }
+  }
+
+  @override
+  Future<void> submitTaggingTask(TaggingTaskResult result) {
+  return _apiService.submitTaggingTask(result);
+  }
+
+  @override
+  Future<bool> checkDatasetConnection(int datasetId) async {
+  try {
+      await _apiService.getDatasetById(datasetId);
+      return true;
+  } catch (e) {
+      return false;
+  }
+  }
+
+  @override
+  Future<void> confirmDatasetAuthentication({
+  required String name,
+  required String password,
+  }) async {
+  _accessTokenStorage.removeTokens();
+  final tokens = await _apiService.confirmDatasetAuthentication(
+      name: name,
+      password: password,
+  );
+
+  await _accessTokenStorage.writeTokens(tokens);
+  }
+
+  @override
+  Future<bool> isAuthenticated() async {
+  final AccessTokenPair? pair = await _accessTokenStorage.readTokens();
+  if (pair == null) {
+      return false;
+  }
+
+  final bool isExpired = JwtDecoder.isExpired(pair.access);
+
+  if (isExpired) {
+      try {
+    final AccessTokenPair? newTokens = await _accessTokenRefresher.refreshTokens();
+    if (newTokens == null) {
+          return false;
+    }
+      } catch (e) {
+    return false;
+      }
+  }
+
+  return true;
+  }
+}
+
+
+// settings_repository_impl.dart
+import 'dart:async';
+
+import 'package:label_pro_client/data/api_core/server/server_address.dart';
+import 'package:label_pro_client/data/api_core/server/server_address_storage.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:rxdart/rxdart.dart';
+
+import '../../domain/models/settings_change.dart';
+import '../providers/shared_preference_service.dart';
+
+class SettingsRepositoryImpl implements SettingsRepository {
+  final SharedPreferenceService _preferenceService;
+  final ServerAddressStorage _serverAddressStorage;
+  final StreamController<SettingsChange> _appSettingsController = BehaviorSubject<SettingsChange>();
+
+  SettingsRepositoryImpl({
+  required SharedPreferenceService preferenceService,
+  required ServerAddressStorage serverAddressStorage,
+  })  : _serverAddressStorage = serverAddressStorage,
+    _preferenceService = preferenceService {
+  _init();
+  }
+
+  Future<void> _init() async {
+  try {
+      final setting = await readSettings();
+      _appSettingsController.add(SettingsChange(
+    oldData: null,
+    newData: setting,
+      ));
+  } catch (e) {
+      // pass
+  }
+  }
+
+  Future<AppSettings> _createAppSettings() async {
+  final settings = AppSettings.empty();
+  await _preferenceService.writeData(
+      'settings',
+      settings.toJson(),
+  );
+  return settings;
+  }
+
+  @override
+  Future<AppSettings> readSettings() async {
+  try {
+      final settingsJson = await _preferenceService.readData('settings');
+      return AppSettings.fromJson(settingsJson);
+  } on Exception {
+      return _createAppSettings();
+  }
+  }
+
+  @override
+  Future<void> updateSettings(AppSettings settings) async {
+  final oldSettings = await readSettings();
+  await _preferenceService.writeData(
+      'settings',
+      settings.toJson(),
+  );
+  await _serverAddressStorage.writeAddress(
+      ServerAddress(
+    ip: settings.serverAddress,
+    port: settings.servicePort,
+      ),
+  );
+  _appSettingsController.add(
+      SettingsChange(
+    oldData: oldSettings,
+    newData: settings,
+      ),
+  );
+  }
+
+  @override
+  Stream<SettingsChange> watchSettings() {
+  return _appSettingsController.stream;
+  }
+}
+
+
+// shared_preference_service.dart
+import 'dart:convert';
+
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class SharedPreferenceService {
+  final SharedPreferences _sharedPreferences;
+
+  SharedPreferenceService({
+  required SharedPreferences sharedPreferences,
+  }) : _sharedPreferences = sharedPreferences;
+
+  Future<void> writeData(String key, Map<String, dynamic> data) async {
+  await _sharedPreferences.setString(
+      key,
+      jsonEncode(data),
+  );
+  }
+
+  Future<Map<String, dynamic>> readData(String key) async {
+  final resultJson = _sharedPreferences.getString(key);
+  if (resultJson == null) {
+      throw DataNotFound();
+  }
+  return jsonDecode(resultJson);
+  }
+
+  Future<bool> containKey(String key) async {
+  return _sharedPreferences.containsKey(key);
+  }
+
+  Future<void> removeData(String key) async {
+  await _sharedPreferences.remove(key);
+  }
+}
+
+
+// label_pro_api_service.dart
+import 'package:dio/dio.dart';
+import 'package:label_pro_client/data/api_core/api_provider.dart';
+import 'package:label_pro_client/data/api_core/request/api_request.dart';
+import 'package:label_pro_client/data/api_core/request/http_method.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_pair.dart';
+import 'package:label_pro_client/domain/models/dataset.dart';
+import 'package:label_pro_client/domain/models/tagging_task.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../domain/models/tagging_task_result.dart';
+
+class LabelProApiService {
+  final ApiProvider _apiProvider;
+  final SharedPreferences _sharedPreferences;
+
+  LabelProApiService({
+  required ApiProvider apiProvider,
+  required SharedPreferences sharedPreferences,
+  })  : _apiProvider = apiProvider,
+    _sharedPreferences = sharedPreferences;
+
+  Future<Dataset> getDatasetById(int id) async {
+  final dataset = await _apiProvider.parsed(
+      request: ApiRequest(
+    method: HttpMethod.get,
+    url: 'api/dataset/$id',
+      ),
+      parser: Dataset.fromJson,
+  );
+  return dataset;
+  }
+
+  Future<TaggingTask> getTaggingTask(int datasetId) async {
+  final task = await _apiProvider.parsed(
+      request: ApiRequest(
+    method: HttpMethod.get,
+    url: 'api/task/',
+    params: {
+          'dataset_id': datasetId,
+    },
+      ),
+      parser: TaggingTask.fromJson,
+  );
+  return task;
+  }
+
+  Future<void> submitTaggingTask(TaggingTaskResult result) async {
+  await _apiProvider.none(
+      request: ApiRequest(
+    method: HttpMethod.post,
+    url: 'api/task/',
+    body: FormData.fromMap(
+          result.toJson(),
+    ),
+      ),
+  );
+  }
+
+  Future<AccessTokenPair> confirmDatasetAuthentication({
+  required String name,
+  required String password,
+  }) async {
+  final result = await _apiProvider.parsed(
+      request: ApiRequest(
+    method: HttpMethod.post,
+    url: 'api/token/',
+    body: FormData.fromMap({
+          'username': name,
+          'password': password,
+    }),
+      ),
+      parser: AccessTokenPair.fromJson,
+  );
+  return result;
+  }
+}
+
+
+// storage_const.dart
+abstract class StorageConstants {
+  static const tokenKey = 'tokens';
+}
+
+
+// api_provider.dart
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/data/api_core/server/server_address.dart';
+import 'package:label_pro_client/data/api_core/server/server_address_storage.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_pair.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_refresher.dart';
+import 'package:label_pro_client/data/api_core/token/access_token_storage.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
+
+import 'request/api_request.dart';
+import 'request/api_request_options.dart';
+
+class ApiProvider {
+  final Dio _dio;
+  final AccessTokenStorage _accessTokenStorage;
+  final AccessTokenRefresher _accessTokenRefresher;
+  final ServerAddressStorage _serverAddressStorage;
+
+  ApiProvider({
+  required Dio dio,
+  required AccessTokenStorage accessTokenStorage,
+  required AccessTokenRefresher accessTokenRefresher,
+  required ServerAddressStorage serverAddressStorage,
+  })  : _dio = dio,
+    _accessTokenStorage = accessTokenStorage,
+    _accessTokenRefresher = accessTokenRefresher,
+    _serverAddressStorage = serverAddressStorage;
+
+  Future<T> parsed<T>({
+  required ApiRequest request,
+  required T Function(Map<String, dynamic> data) parser,
+  ApiRequestOptions options = const ApiRequestOptions(),
+  }) async {
+  final Map<String, dynamic> data = await _request(
+      request: request,
+      options: options,
+  );
+  return parser(data);
+  }
+
+  Future<List<T>> parsedList<T>({
+  required T Function(Map<String, dynamic> data) parser,
+  required ApiRequest request,
+  String? key,
+  bool skipIfThrow = false,
+  ApiRequestOptions options = const ApiRequestOptions(),
+  }) async {
+  final List<T> result = <T>[];
+  final dynamic data = await _request(
+      request: request,
+      options: options,
+  );
+  final List<dynamic> dataToParse = key == null ? data : data[key];
+  for (final Map<String, dynamic> obj in dataToParse) {
+      try {
+    result.add(parser(obj));
+      } catch (e) {
+    if (!skipIfThrow) {
+          rethrow;
+    }
+      }
+  }
+  return result;
+  }
+
+  Future<void> none({
+  required ApiRequest request,
+  ApiRequestOptions options = const ApiRequestOptions(),
+  }) async {
+  await _request(
+      request: request,
+      options: options,
+  );
+  }
+
+  Future<dynamic> _request({
+  required ApiRequest request,
+  required ApiRequestOptions options,
+  bool didRefreshTokens = false,
+  }) async {
+  try {
+      Map<String, dynamic>? headers = request.headers;
+      if (options.useDefaultAuth) {
+    final AccessTokenPair? tokens = await _accessTokenStorage.readTokens();
+    final ServerAddress address = await _serverAddressStorage.readAddress();
+    if (tokens != null) {
+          headers ??= <String, dynamic>{};
+          headers['Authorization'] = 'Bearer ${tokens.access}';
+    }
+    print('http://${address.ip}:${address.port}/${request.url}');
+
+    final Response<dynamic> response = await _dio.request(
+          'http://${address.ip}:${address.port}/${request.url}',
+          data: request.body,
+          queryParameters: request.params,
+          options: Options(
+      method: request.method.key,
+      headers: headers,
+          ),
+    );
+    print(response.statusCode);
+    return response.data;
+      }
+  } on DioException catch (e) {
+      final bool unauthorized = e.response?.statusCode == HttpStatus.unauthorized;
+      final bool canRefresh = options.useDefaultAuth && !didRefreshTokens;
+      if (unauthorized && canRefresh) {
+    final AccessTokenPair? tokens = await _accessTokenRefresher.refreshTokens();
+    if (tokens != null) {
+          await _accessTokenStorage.writeTokens(tokens);
+          return _request(
+      request: request,
+      options: options,
+      didRefreshTokens: true,
+          );
+    }
+      }
+      rethrow;
+  }
+  }
+}
+
+
+// access_token_pair.dart
+import 'package:json_annotation/json_annotation.dart';
+
+// part 'access_token_pair.g.dart';
+
+@JsonSerializable(fieldRename: FieldRename.snake)
+class AccessTokenPair {
+  final String access;
+  final String refresh;
+
+  const AccessTokenPair({
+  required this.access,
+  required this.refresh,
+  });
+
+  factory AccessTokenPair.fromJson(Map<String, dynamic> json) {
+  return AccessTokenPair(
+      access: json['access'] as String,
+      refresh: json['refresh'] as String,
+  );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'access': access,
+    'refresh': refresh,
+      };
+}
+
+
+// access_token_storage.dart
+import 'dart:convert';
+
+import '../../const/storage_const.dart';
+import '../../providers/shared_preference_service.dart';
+import 'access_token_pair.dart';
+
+class AccessTokenStorage {
+  final SharedPreferenceService _sharedPreferenceService;
+
+  AccessTokenStorage({
+  required SharedPreferenceService sharedPreferenceService,
+  }) : _sharedPreferenceService = sharedPreferenceService;
+
+  Future<AccessTokenPair?> readTokens() async {
+  if (!(await _sharedPreferenceService.containKey(StorageConstants.tokenKey))) return null;
+  return AccessTokenPair.fromJson(
+      await _sharedPreferenceService.readData(StorageConstants.tokenKey),
+  );
+  }
+
+  Future<void> writeTokens(AccessTokenPair pair) async {
+  await _sharedPreferenceService.writeData(StorageConstants.tokenKey, pair.toJson());
+  }
+
+  Future<void> removeTokens() async {
+  await _sharedPreferenceService.removeData(StorageConstants.tokenKey);
+  }
+}
+
+
+// access_token_refresher.dart
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:label_pro_client/data/api_core/server/server_address_storage.dart';
+
+import 'access_token_pair.dart';
+import 'access_token_storage.dart';
+
+class AccessTokenRefresher {
+  final AccessTokenStorage _accessTokenStorage;
+  final ServerAddressStorage _serverAddressStorage;
+  final Dio _dio;
+
+  const AccessTokenRefresher({
+  required AccessTokenStorage accessTokenStorage,
+  required ServerAddressStorage serverAddressStorage,
+  required Dio dio,
+  })  : _dio = dio,
+    _serverAddressStorage = serverAddressStorage,
+    _accessTokenStorage = accessTokenStorage;
+
+  Future<AccessTokenPair?> refreshTokens() async {
+  final AccessTokenPair? tokens = await _accessTokenStorage.readTokens();
+  if (tokens != null) {
+      final address = await _serverAddressStorage.readAddress();
+      final Response<dynamic> response = await _dio.post(
+    'http://${address.ip}:${address.port}/api/token/refresh/',
+    data: jsonEncode(
+          {
+      'refresh': tokens.refresh,
+          },
+    ),
+      );
+      final pair = AccessTokenPair.fromJson(response.data);
+      await _accessTokenStorage.writeTokens(pair);
+      return pair;
+  }
+  return null;
+  }
+}
+
+
+// server_address_storage.dart
+import 'package:label_pro_client/data/api_core/server/server_address.dart';
+import 'package:label_pro_client/data/providers/shared_preference_service.dart';
+
+class ServerAddressStorage {
+  final SharedPreferenceService _sharedPreferenceService;
+
+  ServerAddressStorage({
+  required SharedPreferenceService sharedPreferenceService,
+  }) : _sharedPreferenceService = sharedPreferenceService;
+
+  Future<ServerAddress> _createServerAddress() async {
+  final address = ServerAddress(ip: 'localhost', port: 8080);
+  await _sharedPreferenceService.writeData(
+      'server_address',
+      address.toJson(),
+  );
+  return address;
+  }
+
+  Future<void> writeAddress(ServerAddress address) async {
+  await _sharedPreferenceService.writeData(
+      'server_address',
+      address.toJson(),
+  );
+  }
+
+  Future<ServerAddress> readAddress() async {
+  try {
+      final addressData = await _sharedPreferenceService.readData('server_address');
+      return ServerAddress.fromJson(addressData);
+  } on Exception {
+      return _createServerAddress();
+  }
+  }
+}
+
+
+// server_address.dart
+class ServerAddress {
+  final String ip;
+  final int port;
+
+  const ServerAddress({
+  required this.ip,
+  required this.port,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'ip': ip,
+      'port': port,
+  };
+  }
+
+  factory ServerAddress.fromJson(Map<String, dynamic> json) {
+  return ServerAddress(
+      ip: json['ip'] as String,
+      port: json['port'] as int,
+  );
+  }
+}
+
+
+// http_method.dart
+enum HttpMethod {
+  get('GET'),
+  post('POST'),
+  put('PUT'),
+  delete('DELETE'),
+  patch('PATCH'),
+  head('HEAD');
+
+  final String key;
+
+  const HttpMethod(this.key);
+}
+
+
+// api_request_options.dart
+class ApiRequestOptions {
+  final bool useDefaultAuth;
+
+  const ApiRequestOptions({
+  this.useDefaultAuth = true,
+  });
+}
+
+
+// api_request.dart
+import 'http_method.dart';
+
+class ApiRequest {
+  final HttpMethod method;
+  final String url;
+  final Object? body;
+  final Map<String, dynamic>? params;
+  final Map<String, dynamic>? headers;
+
+  const ApiRequest({
+  required this.method,
+  required this.url,
+  this.body,
+  this.params,
+  this.headers,
+  });
+}
+
+
+
+########################################
+// dataset_repository.dart
+import 'package:label_pro_client/domain/models/tagging_task.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+
+import '../models/dataset.dart';
+
+abstract interface class DatasetRepository {
+  Future<Dataset> getDatasetById(int id);
+  Future<TaggingTask> getTaggingTask();
+
+  Future<void> submitTaggingTask(TaggingTaskResult result) async {}
+  Future<bool> checkDatasetConnection(int datasetId);
+  Future<void> confirmDatasetAuthentication({
+  required String name,
+  required String password,
+  });
+  Future<bool> isAuthenticated();
+}
+
+
+// settings_repository.dart
+import 'package:label_pro_client/domain/models/app_settings.dart';
+
+import '../models/settings_change.dart';
+
+abstract interface class SettingsRepository {
+  Future<AppSettings> readSettings();
+  Future<void> updateSettings(AppSettings settings);
+  Stream<SettingsChange> watchSettings();
+}
+
+
+// label.dart
+class Label {
+  final int id;
+  final String name;
+
+  const Label({
+  required this.id,
+  required this.name,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Label && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  factory Label.fromJson(Map<String, dynamic> json) {
+  return Label(
+      id: json['id'] as int,
+      name: json['name'] as String,
+  );
+  }
+
+  Map<String, dynamic> toJson() {
+  return {
+      'id': id,
+      'name': name,
+  };
+  }
+}
+
+
+// app_settings.dart
+class AppSettings {
+  final String serverAddress;
+  final int servicePort;
+  final String username;
+  final String password;
+  final int datasetId;
+
+  const AppSettings({
+  required this.serverAddress,
+  required this.servicePort,
+  required this.username,
+  required this.password,
+  required this.datasetId,
+  });
+
+  const AppSettings.empty({
+  this.serverAddress = 'localhost',
+  this.servicePort = 8080,
+  this.username = '',
+  this.password = '',
+  this.datasetId = 0,
+  });
+
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+  return AppSettings(
+      serverAddress: json['serverAddress'] as String,
+      servicePort: json['servicePort'] as int,
+      username: json['username'] as String,
+      password: json['password'] as String,
+      datasetId: json['datasetId'] as int,
+  );
+  }
+
+  Map<String, dynamic> toJson() {
+  return {
+      'serverAddress': serverAddress,
+      'servicePort': servicePort,
+      'username': username,
+      'password': password,
+      'datasetId': datasetId,
+  };
+  }
+
+  AppSettings copyWith({
+  String? serverAddress,
+  int? servicePort,
+  String? username,
+  String? password,
+  int? datasetId,
+  }) {
+  return AppSettings(
+      serverAddress: serverAddress ?? this.serverAddress,
+      servicePort: servicePort ?? this.servicePort,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      datasetId: datasetId ?? this.datasetId,
+  );
+  }
+
+  @override
+  bool operator ==(Object other) {
+  if (identical(this, other)) return true;
+
+  return other is AppSettings &&
+    other.serverAddress == serverAddress &&
+    other.servicePort == servicePort &&
+    other.username == username &&
+    other.password == password &&
+    other.datasetId == datasetId;
+  }
+
+  @override
+  int get hashCode {
+  return serverAddress.hashCode ^
+    servicePort.hashCode ^
+    username.hashCode ^
+    password.hashCode ^
+    datasetId.hashCode;
+  }
+
+  @override
+  String toString() {
+  return 'AppSettings(serverAddress: $serverAddress, servicePort: $servicePort, username: $username, password: $password, datasetId: $datasetId)';
+  }
+}
+
+
+// dataset.dart
+import 'package:label_pro_client/core/utils/string_ext.dart';
+import 'package:label_pro_client/domain/models/enums/tagging_task_type.dart';
+
+import 'label.dart';
+
+class Dataset {
+  final int id;
+  final String name;
+  final String? helperText;
+  final List<Label> availableLabels;
+  final TaggingTaskType tasksType;
+
+  const Dataset({
+  required this.id,
+  required this.availableLabels,
+  required this.tasksType,
+  required this.name,
+  this.helperText,
+  });
+
+  factory Dataset.fromJson(Map<String, dynamic> json) {
+  return Dataset(
+      id: json['id'] as int,
+      helperText: json['helperText'] as String?,
+      name: json['name'] as String,
+      availableLabels: (json['availableLabels'] as List<dynamic>)
+          .map((label) => Label.fromJson(label as Map<String, dynamic>))
+          .toList(),
+      tasksType: TaggingTaskType.values
+          .byName((json['tasksType'] as String).toCamelCase()),
+  );
+  }
+}
+
+
+// polygon.dart
+import 'dart:ui';
+
+import 'package:label_pro_client/domain/models/label.dart';
+
+class Polygon {
+  final List<Offset> points;
+  final Label label;
+
+  const Polygon({
+  required this.points,
+  required this.label,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'points': points.map((e) => {'x': e.dx, 'y': e.dy}).toList(),
+      'label': label.toJson(),
+  };
+  }
+}
+
+
+// bounding_box.dart
+import 'dart:ui';
+
+import 'label.dart';
+
+class BoundingBox {
+  final Rect box;
+  final Label label;
+
+  const BoundingBox({
+  required this.box,
+  required this.label,
+  });
+
+  BoundingBox copyWith({
+  Rect? box,
+  Label? label,
+  }) {
+  return BoundingBox(
+      box: box ?? this.box,
+      label: label ?? this.label,
+  );
+  }
+
+  Map<String, dynamic> toJson() {
+  return {
+      'box': {
+    'left': box.left,
+    'top': box.top,
+    'right': box.right,
+    'bottom': box.bottom,
+      },
+      'label': label.toJson(),
+  };
+  }
+}
+
+
+// tagging_task.dart
+import 'package:label_pro_client/core/utils/string_ext.dart';
+
+import 'enums/tagging_task_type.dart';
+
+class TaggingTask {
+  final TaggingTaskType type;
+  final String filename;
+  final String idInFile;
+  final String data;
+  final Map<String, dynamic> metadata;
+
+  const TaggingTask({
+  required this.type,
+  required this.filename,
+  required this.idInFile,
+  required this.metadata,
+  required this.data,
+  });
+
+  factory TaggingTask.fromJson(Map<String, dynamic> json) {
+  return TaggingTask(
+      data: json['data'] as String,
+      type: TaggingTaskType.values.byName((json['type'] as String).toCamelCase()),
+      filename: json['filename'] as String,
+      idInFile: json['idInFile'] as String,
+      metadata: json['metadata'] as Map<String, dynamic>,
+  );
+  }
+}
+
+
+// settings_change.dart
+import 'app_settings.dart';
+
+class SettingsChange {
+  final AppSettings? oldData;
+  final AppSettings newData;
+
+  const SettingsChange({
+  required this.oldData,
+  required this.newData,
+  });
+}
+
+
+// tagging_task_result.dart
+import 'dart:convert';
+
+class TaggingTaskResult {
+  final String filename;
+  final String idInFile;
+  final int datasetId;
+  final Map<String, dynamic> data;
+
+  const TaggingTaskResult({
+  required this.filename,
+  required this.idInFile,
+  required this.datasetId,
+  required this.data,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'file_path': filename,
+      'id_in_file': idInFile,
+      'dataset_id': datasetId,
+      'data': jsonEncode(data),
+  };
+  }
+}
+
+
+// tagging_task_type.dart
+enum TaggingTaskType {
+  boundingBox,
+  wordTagging,
+  polygons,
+  custom;
+}
+
+
+// custom_data_type.dart
+enum CustomDataType {
+  sound,
+  image,
+  string;
+
+  static CustomDataType fromString(String data) {
+  switch (data) {
+      case 'sound':
+    return CustomDataType.sound;
+      case 'image':
+    return CustomDataType.image;
+      case 'string':
+    return CustomDataType.string;
+      default:
+    return CustomDataType.string;
+  }
+  }
+}
+
+
+// custom_input_type.dart
+enum CustomInputType {
+  oneFromMany,
+  manyFromMany,
+  text;
+
+  static CustomInputType fromString(String data) {
+  switch (data) {
+      case 'one_from_many':
+      case 'oneFromMany':
+    return CustomInputType.oneFromMany;
+      case 'manyFromMany':
+      case 'many_from_many':
+    return CustomInputType.manyFromMany;
+      case 'text':
+    return CustomInputType.text;
+      default:
+    return CustomInputType.text;
+  }
+  }
+
+  String toJson() {
+  switch (this) {
+      case CustomInputType.oneFromMany:
+    return 'one_from_many';
+      case CustomInputType.manyFromMany:
+    return 'many_from_many';
+      case CustomInputType.text:
+    return 'text';
+  }
+  }
+}
+
+
+// bounding_box_solution_data.dart
+import 'package:label_pro_client/domain/models/bounding_box.dart';
+
+class BoundingBoxTaskResultData {
+  final List<BoundingBox> boxes;
+
+  const BoundingBoxTaskResultData({
+  required this.boxes,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'boxes': boxes.map((box) => box.toJson()).toList(),
+  };
+  }
+}
+
+
+// custom_solution_data.dart
+import 'package:label_pro_client/domain/models/enums/custom_input_type.dart';
+
+class CustomSolutionData {
+  final CustomInputType type;
+  final List<String> result;
+
+  const CustomSolutionData({
+  required this.type,
+  required this.result,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'type': type.toJson(),
+      'result': result,
+  };
+  }
+}
+
+
+// word_tagging_solution_data.dart
+class WordTaggingSolutionData {
+  final Map<int, String> markedWords;
+
+  const WordTaggingSolutionData({
+  required this.markedWords,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'words': markedWords.map((key, value) => MapEntry(key.toString(), value)),
+  };
+  }
+}
+
+
+// polygon_solution_data.dart
+import 'package:label_pro_client/domain/models/polygon.dart';
+
+class PolygonSolutionData {
+  final List<Polygon> polygons;
+
+  const PolygonSolutionData({
+  required this.polygons,
+  });
+
+  Map<String, dynamic> toJson() {
+  return {
+      'polygons': polygons.map((poly) => poly.toJson()).toList(),
+  };
+  }
+}
+
+
+// exceptions.dart
+class DatasetIsEmpty implements Exception {}
+
+class DataNotFound implements Exception {}
+
+
+
+########################################
+// router.dart
+import 'package:auto_route/auto_route.dart';
+import 'package:label_pro_client/navigation/router.gr.dart';
+
+@AutoRouterConfig(replaceInRouteName: 'Screen|Dialog,Route')
+class AppRouter extends RootStackRouter {
+  AppRouter();
+
+  @override
+  List<AutoRoute> get routes => <AutoRoute>[
+    CustomRoute(
+          page: HomeRoute.page,
+          initial: true,
+          durationInMilliseconds: 0,
+          children: [
+      CustomRoute(
+              page: TaggingRoute.page,
+              initial: true,
+              durationInMilliseconds: 0,
+              children: [
+        CustomRoute(
+                  page: BoundingBoxTaskRoute.page,
+                  durationInMilliseconds: 0,
+        ),
+        CustomRoute(
+                  page: WordMarkerTaskRoute.page,
+                  durationInMilliseconds: 0,
+        ),
+              ],
+      ),
+      CustomRoute(
+              page: SettingsRoute.page,
+              maintainState: false,
+              durationInMilliseconds: 0,
+      ),
+          ],
+    ),
+      ];
+}
+
+
+// router.gr.dart
+// dart format width=80
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+// **************************************************************************
+// AutoRouterGenerator
+// **************************************************************************
+
+// ignore_for_file: type=lint
+// coverage:ignore-file
+
+// ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:auto_route/auto_route.dart' as _i7;
+import 'package:label_pro_client/features/home/screen/home_screen.dart' as _i3;
+import 'package:label_pro_client/features/settings/screen/settings_screen.dart'
+  as _i4;
+import 'package:label_pro_client/features/tagging/screen/tagging_screen.dart'
+  as _i5;
+import 'package:label_pro_client/features/tagging/tasks/bounding_box/screen/bounding_box_task_screen.dart'
+  as _i1;
+import 'package:label_pro_client/features/tagging/tasks/custom/screen/custom_task_screen.dart'
+  as _i2;
+import 'package:label_pro_client/features/tagging/tasks/word_marker/screen/word_marker_task_screen.dart'
+  as _i6;
+
+/// generated route for
+/// [_i1.BoundingBoxTaskScreen]
+class BoundingBoxTaskRoute extends _i7.PageRouteInfo<void> {
+  const BoundingBoxTaskRoute({List<_i7.PageRouteInfo>? children})
+  : super(BoundingBoxTaskRoute.name, initialChildren: children);
+
+  static const String name = 'BoundingBoxTaskRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i1.BoundingBoxTaskScreen();
+  },
+  );
+}
+
+/// generated route for
+/// [_i2.CustomTaskScreen]
+class CustomTaskRoute extends _i7.PageRouteInfo<void> {
+  const CustomTaskRoute({List<_i7.PageRouteInfo>? children})
+  : super(CustomTaskRoute.name, initialChildren: children);
+
+  static const String name = 'CustomTaskRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i2.CustomTaskScreen();
+  },
+  );
+}
+
+/// generated route for
+/// [_i3.HomeScreen]
+class HomeRoute extends _i7.PageRouteInfo<void> {
+  const HomeRoute({List<_i7.PageRouteInfo>? children})
+  : super(HomeRoute.name, initialChildren: children);
+
+  static const String name = 'HomeRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i3.HomeScreen();
+  },
+  );
+}
+
+/// generated route for
+/// [_i4.SettingsScreen]
+class SettingsRoute extends _i7.PageRouteInfo<void> {
+  const SettingsRoute({List<_i7.PageRouteInfo>? children})
+  : super(SettingsRoute.name, initialChildren: children);
+
+  static const String name = 'SettingsRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i4.SettingsScreen();
+  },
+  );
+}
+
+/// generated route for
+/// [_i5.TaggingScreen]
+class TaggingRoute extends _i7.PageRouteInfo<void> {
+  const TaggingRoute({List<_i7.PageRouteInfo>? children})
+  : super(TaggingRoute.name, initialChildren: children);
+
+  static const String name = 'TaggingRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i5.TaggingScreen();
+  },
+  );
+}
+
+/// generated route for
+/// [_i6.WordMarkerTaskScreen]
+class WordMarkerTaskRoute extends _i7.PageRouteInfo<void> {
+  const WordMarkerTaskRoute({List<_i7.PageRouteInfo>? children})
+  : super(WordMarkerTaskRoute.name, initialChildren: children);
+
+  static const String name = 'WordMarkerTaskRoute';
+
+  static _i7.PageInfo page = _i7.PageInfo(
+  name,
+  builder: (data) {
+      return const _i6.WordMarkerTaskScreen();
+  },
+  );
+}
+
+
+// navigation_di.dart
+
+
+
+
+########################################
+// tagging_state.dart
+import 'package:label_pro_client/domain/models/dataset.dart';
+
+class TaggingState {
+  final Dataset? dataset;
+  final bool isLoading;
+
+  const TaggingState({
+  required this.isLoading,
+  this.dataset,
+  });
+
+  TaggingState.initial({
+  this.isLoading = false,
+  this.dataset,
+  });
+
+  TaggingState copyWith({
+  Dataset? Function()? dataset,
+  bool? isLoading,
+  }) {
+  return TaggingState(
+      isLoading: isLoading ?? this.isLoading,
+      dataset: dataset != null ? dataset() : this.dataset,
+  );
+  }
+}
+
+
+// tagging_cubit.dart
+import 'dart:async';
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
+import 'package:label_pro_client/domain/models/dataset.dart';
+import 'package:label_pro_client/domain/models/enums/tagging_task_type.dart';
+import 'package:label_pro_client/domain/models/settings_change.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:label_pro_client/features/tagging/bloc/tagging_state.dart';
+import 'package:label_pro_client/navigation/router.dart';
+import 'package:label_pro_client/navigation/router.gr.dart';
+
+class TaggingCubit extends Cubit<TaggingState> {
+  final DatasetRepository _datasetRepository;
+  final SettingsRepository _settingsRepository;
+  final AppRouter _appRouter;
+  StreamSubscription<SettingsChange>? _settingsSubscription;
+
+  TaggingCubit({
+  required AppRouter appRouter,
+  required SettingsRepository settingsRepository,
+  required DatasetRepository datasetRepository,
+  })  : _settingsRepository = settingsRepository,
+    _datasetRepository = datasetRepository,
+    _appRouter = appRouter,
+    super(
+          TaggingState.initial(),
+    ) {
+  _settingsSubscription = _settingsRepository.watchSettings().listen(
+      (data) async {
+    _init();
+      },
+  );
+  }
+
+  Future<void> _init() async {
+  try {
+      emit(
+    state.copyWith(isLoading: true),
+      );
+      final settings = await _settingsRepository.readSettings();
+      final Dataset dataset = await _datasetRepository.getDatasetById(settings.datasetId);
+      emit(
+    state.copyWith(
+          isLoading: false,
+          dataset: () => dataset,
+    ),
+      );
+      print('DATASET LOADeD');
+  } catch (e) {
+      print(e);
+      emit(
+    state.copyWith(
+          dataset: () => null,
+          isLoading: false,
+    ),
+      );
+  }
+  }
+
+  @override
+  Future<void> close() async {
+  super.close();
+  await _settingsSubscription?.cancel();
+  }
+}
+
+
+
+########################################
+// bounding_box_task_state.dart
+part of 'bounding_box_task_cubit.dart';
+
+class BoundingBoxTaskState {
+  final String imageUrl;
+  final String filename;
+  final String idInFile;
+  final List<Label> availableLabels;
+  final List<BoundingBox> boxes;
+  final int creatingBoxIndex;
+  final List<int> editingBoxIndexes;
+  final int selectedClassId;
+  final Size size;
+  final bool isTaskLoading;
+  final bool isEditAllEnabled;
+  final bool isDatasetEmpty;
+
+  BoundingBoxTaskState({
+  required this.imageUrl,
+  required this.filename,
+  required this.idInFile,
+  required this.availableLabels,
+  required this.boxes,
+  required this.creatingBoxIndex,
+  required this.editingBoxIndexes,
+  required this.size,
+  required this.selectedClassId,
+  required this.isEditAllEnabled,
+  required this.isTaskLoading,
+  required this.isDatasetEmpty,
+  });
+
+  BoundingBoxTaskState.initial({
+  this.imageUrl = '',
+  this.filename = '',
+  this.idInFile = '',
+  this.availableLabels = const [],
+  this.creatingBoxIndex = 0,
+  this.boxes = const [],
+  this.size = Size.zero,
+  this.editingBoxIndexes = const [],
+  this.selectedClassId = 0,
+  this.isEditAllEnabled = false,
+  this.isTaskLoading = false,
+  this.isDatasetEmpty = false,
+  });
+
+  BoundingBoxTaskState copyWith({
+  String? imageUrl,
+  String? filename,
+  String? idInFile,
+  List<Label>? availableLabels,
+  List<BoundingBox>? boxes,
+  int? creatingBoxIndex,
+  List<int>? editingBoxIndexes,
+  int? selectedClassId,
+  Size? size,
+  bool? isTaskLoading,
+  bool? isEditAllEnabled,
+  bool? isDatasetEmpty,
+  }) {
+  return BoundingBoxTaskState(
+      imageUrl: imageUrl ?? this.imageUrl,
+      filename: filename ?? this.filename,
+      idInFile: idInFile ?? this.idInFile,
+      selectedClassId: selectedClassId ?? this.selectedClassId,
+      availableLabels: availableLabels ?? this.availableLabels,
+      boxes: boxes ?? this.boxes,
+      creatingBoxIndex: creatingBoxIndex ?? this.creatingBoxIndex,
+      editingBoxIndexes: editingBoxIndexes ?? this.editingBoxIndexes,
+      size: size ?? this.size,
+      isEditAllEnabled: isEditAllEnabled ?? this.isEditAllEnabled,
+      isTaskLoading: isTaskLoading ?? this.isTaskLoading,
+      isDatasetEmpty: isDatasetEmpty ?? this.isDatasetEmpty,
+  );
+  }
+}
+
+
+// bounding_box_task_cubit.dart
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/core/utils/image_utils.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/bounding_box.dart';
+import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/models/task_types/bounding_box_solution_data.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+
+part 'bounding_box_task_state.dart';
+
+class BoundingBoxTaskCubit extends Cubit<BoundingBoxTaskState> {
+  final DatasetRepository _datasetRepository;
+
+  BoundingBoxTaskCubit({
+  required DatasetRepository datasetRepository,
+  required List<Label> labels,
+  })  : _datasetRepository = datasetRepository,
+    super(
+          BoundingBoxTaskState.initial(
+      availableLabels: labels,
+          ),
+    ) {
+  _init();
+  }
+
+  Future<void> _init() async {
+  print('_init');
+  final labels = state.availableLabels;
+  emit(
+      BoundingBoxTaskState.initial(
+    availableLabels: labels,
+    isTaskLoading: true,
+    selectedClassId: state.selectedClassId,
+      ),
+  );
+  try {
+      final task = await _datasetRepository.getTaggingTask();
+
+      final size = await getImageSize(
+    buildFileUrl(task.data),
+      );
+      emit(
+    state.copyWith(
+          size: size,
+          imageUrl: buildFileUrl(task.data),
+          isTaskLoading: false,
+          idInFile: task.idInFile,
+          filename: task.filename,
+    ),
+      );
+  } on DatasetIsEmpty {
+      emit(
+    state.copyWith(
+          isDatasetEmpty: true,
+          isTaskLoading: false,
+    ),
+      );
+  }
+  }
+
+  Rect _resizeToImageSize({
+  required Rect rect,
+  required Size originalSize,
+  }) {
+  final Rect normalizedRect = Rect.fromLTRB(
+      rect.left / originalSize.width,
+      rect.top / originalSize.height,
+      rect.right / originalSize.width,
+      rect.bottom / originalSize.height,
+  );
+
+  return Rect.fromLTRB(
+      normalizedRect.left * state.size.width,
+      normalizedRect.top * state.size.height,
+      normalizedRect.right * state.size.width,
+      normalizedRect.bottom * state.size.height,
+  );
+  }
+
+  void createBoundingBox(
+  Rect rect,
+  Size size,
+  ) {
+  emit(
+      state.copyWith(
+    boxes: [
+          ...state.boxes,
+          BoundingBox(
+      box: _resizeToImageSize(
+              rect: rect,
+              originalSize: size,
+      ),
+      label: Label(
+              id: state.selectedClassId,
+              name: state.availableLabels
+                      .where((e) => e.id == state.selectedClassId)
+                      .firstOrNull
+                      ?.name ??
+                  '',
+      ),
+          )
+    ],
+    creatingBoxIndex: state.boxes.length,
+      ),
+  );
+  }
+
+  void updateBoundingBoxPosition({
+  required Offset offset,
+  required int index,
+  required double zoom,
+  required Size size,
+  }) {
+  if (index >= state.boxes.length) {
+      return;
+  }
+  final oldBox = state.boxes.removeAt(index);
+  final newBox = Rect.fromLTRB(
+      oldBox.box.left * zoom + offset.dx,
+      oldBox.box.top * zoom + offset.dy,
+      oldBox.box.right * zoom + offset.dx,
+      oldBox.box.bottom * zoom + offset.dy,
+  );
+
+  emit(
+      state.copyWith(
+    boxes: [...state.boxes]..insert(
+      index,
+      oldBox.copyWith(
+              box: _resizeToImageSize(
+        rect: newBox,
+        originalSize: size,
+              ),
+      ),
+          ),
+      ),
+  );
+  }
+
+  void updateBoundingBoxSize({
+  required Rect newPosition,
+  required int index,
+  required Size size,
+  }) {
+  if (index >= state.boxes.length) {
+      return;
+  }
+
+  final box = state.boxes[index];
+
+  emit(
+      state.copyWith(
+    boxes: [...state.boxes]
+          ..removeAt(index)
+          ..insert(
+      index,
+      box.copyWith(
+              box: _resizeToImageSize(
+        rect: newPosition,
+        originalSize: size,
+              ),
+      ),
+          ),
+      ),
+  );
+  }
+
+  void editBoundingBox(int index) {
+  emit(
+      state.copyWith(
+    editingBoxIndexes: [index],
+      ),
+  );
+  }
+
+  void clearEditBoundingBox() {
+  emit(
+      state.copyWith(
+    editingBoxIndexes: [],
+      ),
+  );
+  }
+
+  void removeBoundingBox(int index) {
+  emit(
+      state.copyWith(
+    boxes: state.boxes..removeAt(index),
+    editingBoxIndexes: state.editingBoxIndexes
+      .where(
+              (e) => e != index,
+      )
+      .toList(),
+      ),
+  );
+  }
+
+  void changeSelectedClassId(int newClassId) {
+  emit(
+      state.copyWith(selectedClassId: newClassId),
+  );
+  }
+
+  void updateEditAll(bool value) {
+  emit(
+      state.copyWith(
+    isEditAllEnabled: value,
+      ),
+  );
+  }
+
+  Future<void> submitTask() async {
+  print(
+      BoundingBoxTaskResultData(
+    boxes: state.boxes,
+      ).toJson(),
+  );
+  final settings = await appLocator<SettingsRepository>().readSettings();
+  await _datasetRepository.submitTaggingTask(
+      TaggingTaskResult(
+    filename: state.filename,
+    idInFile: state.idInFile,
+    datasetId: settings.datasetId,
+    data: BoundingBoxTaskResultData(
+          boxes: state.boxes,
+    ).toJson(),
+      ),
+  );
+  _init();
+  }
+}
+
+
+
+########################################
+// custom_task_state.dart
+import 'package:label_pro_client/domain/models/enums/custom_data_type.dart';
+import 'package:label_pro_client/domain/models/enums/custom_input_type.dart';
+import 'package:label_pro_client/domain/models/label.dart';
+
+class CustomTaskState {
+  final bool isLoading;
+  final bool isDatasetOver;
+  final String data;
+  final String idInFile;
+  final String filename;
+  final List<Label> availableLabels;
+  final CustomInputType inputType;
+  final CustomDataType dataType;
+  final List<String> input;
+
+  const CustomTaskState({
+  required this.isLoading,
+  required this.isDatasetOver,
+  required this.data,
+  required this.idInFile,
+  required this.filename,
+  required this.availableLabels,
+  required this.inputType,
+  required this.dataType,
+  required this.input,
+  });
+
+  CustomTaskState.initial({
+  this.isLoading = false,
+  this.isDatasetOver = false,
+  this.data = '',
+  this.idInFile = '',
+  this.filename = '',
+  this.availableLabels = const [],
+  this.inputType = CustomInputType.oneFromMany,
+  this.dataType = CustomDataType.string,
+  this.input = const [],
+  });
+
+  CustomTaskState copyWith({
+  bool? isLoading,
+  bool? isDatasetOver,
+  String? data,
+  String? idInFile,
+  String? filename,
+  List<Label>? availableLabels,
+  CustomInputType? inputType,
+  CustomDataType? dataType,
+  List<String>? input,
+  }) {
+  return CustomTaskState(
+      isLoading: isLoading ?? this.isLoading,
+      isDatasetOver: isDatasetOver ?? this.isDatasetOver,
+      data: data ?? this.data,
+      idInFile: idInFile ?? this.idInFile,
+      filename: filename ?? this.filename,
+      availableLabels: availableLabels ?? this.availableLabels,
+      inputType: inputType ?? this.inputType,
+      dataType: dataType ?? this.dataType,
+      input: input ?? this.input,
+  );
+  }
+}
+
+
+// custom_task_cubit.dart
+import 'dart:convert';
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/enums/custom_data_type.dart';
+import 'package:label_pro_client/domain/models/enums/custom_input_type.dart';
+import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/models/task_types/custom_solution_data.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:label_pro_client/features/tagging/tasks/custom/bloc/custom_task_state.dart';
+
+class CustomTaskCubit extends Cubit<CustomTaskState> {
+  final DatasetRepository _datasetRepository;
+
+  CustomTaskCubit({
+  required List<Label> labels,
+  required DatasetRepository datasetRepository,
+  })  : _datasetRepository = datasetRepository,
+    super(CustomTaskState.initial(availableLabels: labels)) {
+  _init();
+  }
+
+  Future<void> _init() async {
+  try {
+      emit(
+    state.copyWith(
+          isLoading: true,
+    ),
+      );
+      final task = await _datasetRepository.getTaggingTask();
+
+      emit(
+    state.copyWith(
+          idInFile: task.idInFile,
+          filename: task.filename,
+          isLoading: false,
+          data: task.data,
+          inputType: CustomInputType.fromString(
+      task.metadata['input_type'],
+          ),
+          dataType: CustomDataType.fromString(
+      task.metadata['data_type'],
+          ),
+    ),
+      );
+  } on DatasetIsEmpty {
+      emit(
+    state.copyWith(
+          isDatasetOver: true,
+          isLoading: false,
+    ),
+      );
+  }
+  }
+
+  void updateSelectedData(List<String> data) {
+  emit(
+      state.copyWith(
+    input: data,
+      ),
+  );
+  }
+
+  Future<void> submitTask() async {
+  print(
+      jsonEncode(
+    CustomSolutionData(
+          type: state.inputType,
+          result: state.input,
+    ).toJson(),
+      ),
+  );
+  final settings = await appLocator<SettingsRepository>().readSettings();
+  try {
+      await _datasetRepository.submitTaggingTask(
+    TaggingTaskResult(
+          filename: state.filename,
+          idInFile: state.idInFile,
+          datasetId: settings.datasetId,
+          data: CustomSolutionData(
+      type: state.inputType,
+      result: state.input,
+          ).toJson(),
+    ),
+      );
+      _init();
+  } on DatasetIsEmpty {
+      emit(state.copyWith(
+    isDatasetOver: true,
+    isLoading: false,
+      ));
+  }
+  }
+}
+
+
+
+########################################
+// polygon_task_cubit.dart
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/core/utils/image_utils.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/polygon.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/models/task_types/polygon_solution_data.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+
+part 'polygon_task_state.dart';
+
+class PolygonTaskCubit extends Cubit<PolygonTaskState> {
+  final DatasetRepository _datasetRepository;
+
+  PolygonTaskCubit({
+  required DatasetRepository datasetRepository,
+  required List<Label> labels,
+  })  : _datasetRepository = datasetRepository,
+    super(
+          PolygonTaskState.initial(
+      availableLabels: labels,
+          ),
+    ) {
+  _init();
+  }
+
+  Future<void> _init() async {
+  final labels = state.availableLabels;
+  emit(
+      PolygonTaskState.initial(
+    availableLabels: labels,
+    isTaskLoading: true,
+    selectedClassId: state.selectedClassId,
+      ),
+  );
+  try {
+      final task = await _datasetRepository.getTaggingTask();
+
+      final size = await getImageSize(
+    buildFileUrl(task.data),
+      );
+      emit(
+    state.copyWith(
+          size: size,
+          imageUrl: buildFileUrl(task.data),
+          isTaskLoading: false,
+          idInFile: task.idInFile,
+          filename: task.filename,
+    ),
+      );
+  } on DatasetIsEmpty {
+      emit(
+    state.copyWith(
+          isDatasetEmpty: true,
+          isTaskLoading: false,
+    ),
+      );
+  }
+  }
+
+  Rect _resizeToImageSize({
+  required Rect rect,
+  required Size originalSize,
+  }) {
+  final Rect normalizedRect = Rect.fromLTRB(
+      rect.left / originalSize.width,
+      rect.top / originalSize.height,
+      rect.right / originalSize.width,
+      rect.bottom / originalSize.height,
+  );
+
+  return Rect.fromLTRB(
+      normalizedRect.left * state.size.width,
+      normalizedRect.top * state.size.height,
+      normalizedRect.right * state.size.width,
+      normalizedRect.bottom * state.size.height,
+  );
+  }
+
+  void createPolygon(
+  List<Offset> points,
+  Size size,
+  ) {
+  emit(
+      state.copyWith(
+    polygons: state.polygons
+          ..add(
+      Polygon(
+              points: points,
+              label: state.availableLabels[state.selectedClassId],
+      ),
+          ),
+      ),
+  );
+  }
+
+  void updatePolygons(List<Polygon> polygons) {
+  emit(state.copyWith(polygons: polygons));
+  }
+
+  void updatePolyPointPosition({
+  required Offset offset,
+  required int index,
+  required int pointIndex,
+  required Size size,
+  }) {
+  final updatedPolygons = [...state.polygons];
+  updatedPolygons[index].points[pointIndex] = offset;
+
+  emit(
+      state.copyWith(
+    polygons: updatedPolygons,
+      ),
+  );
+  }
+
+  void addPointToPolygon({
+  required Offset point,
+  required int index,
+  required int polyIndex,
+  }) {
+  final updatedPolygons = [...state.polygons];
+  final points = updatedPolygons[index].points;
+  points.insert(index, point);
+  final oldPoly = updatedPolygons.removeAt(polyIndex);
+  updatedPolygons.insert(
+      polyIndex,
+      Polygon(points: points, label: oldPoly.label),
+  );
+
+  emit(
+      state.copyWith(polygons: updatedPolygons),
+  );
+  }
+
+  void editPolygon(int index) {
+  emit(
+      state.copyWith(
+    editingPolygonsIndexes: [index],
+      ),
+  );
+  }
+
+  void clearEditPolygon() {
+  emit(
+      state.copyWith(
+    editingPolygonsIndexes: [],
+      ),
+  );
+  }
+
+  void removePolygon(int index) {
+  emit(
+      state.copyWith(
+    polygons: state.polygons..removeAt(index),
+    editingPolygonsIndexes: state.editingPolygonsIndexes
+      .where(
+              (e) => e != index,
+      )
+      .toList(),
+      ),
+  );
+  }
+
+  void changeSelectedClassId(int newClassId) {
+  emit(
+      state.copyWith(selectedClassId: newClassId),
+  );
+  }
+
+  void updateEditAll(bool value) {
+  emit(
+      state.copyWith(
+    isEditAllEnabled: value,
+      ),
+  );
+  }
+
+  Future<void> submitTask() async {
+  print(state.polygons.first.points);
+  final settings = await appLocator<SettingsRepository>().readSettings();
+  await _datasetRepository.submitTaggingTask(
+      TaggingTaskResult(
+    filename: state.filename,
+    idInFile: state.idInFile,
+    datasetId: settings.datasetId,
+    data: PolygonSolutionData(polygons: state.polygons).toJson(),
+      ),
+  );
+  _init();
+  }
+}
+
+
+// polygon_task_state.dart
+part of 'polygon_task_cubit.dart';
+
+class PolygonTaskState {
+  final String imageUrl;
+  final String filename;
+  final String idInFile;
+  final List<Label> availableLabels;
+  final List<Polygon> polygons;
+  final List<int> editingPolygonsIndexes;
+  final int selectedClassId;
+  final Size size;
+  final bool isTaskLoading;
+  final bool isEditAllEnabled;
+  final bool isDatasetEmpty;
+
+  PolygonTaskState({
+  required this.imageUrl,
+  required this.filename,
+  required this.idInFile,
+  required this.availableLabels,
+  required this.polygons,
+  required this.editingPolygonsIndexes,
+  required this.size,
+  required this.selectedClassId,
+  required this.isEditAllEnabled,
+  required this.isTaskLoading,
+  required this.isDatasetEmpty,
+  });
+
+  PolygonTaskState.initial({
+  this.imageUrl = '',
+  this.filename = '',
+  this.idInFile = '',
+  this.availableLabels = const [],
+  this.polygons = const [],
+  this.size = Size.zero,
+  this.editingPolygonsIndexes = const [],
+  this.selectedClassId = 0,
+  this.isEditAllEnabled = false,
+  this.isTaskLoading = false,
+  this.isDatasetEmpty = false,
+  });
+
+  PolygonTaskState copyWith({
+  String? imageUrl,
+  String? filename,
+  String? idInFile,
+  List<Label>? availableLabels,
+  List<Polygon>? polygons,
+  List<int>? editingPolygonsIndexes,
+  int? selectedClassId,
+  Size? size,
+  bool? isTaskLoading,
+  bool? isEditAllEnabled,
+  bool? isDatasetEmpty,
+  }) {
+  return PolygonTaskState(
+      imageUrl: imageUrl ?? this.imageUrl,
+      filename: filename ?? this.filename,
+      idInFile: idInFile ?? this.idInFile,
+      selectedClassId: selectedClassId ?? this.selectedClassId,
+      availableLabels: availableLabels ?? this.availableLabels,
+      polygons: polygons ?? this.polygons,
+      editingPolygonsIndexes: editingPolygonsIndexes ?? this.editingPolygonsIndexes,
+      size: size ?? this.size,
+      isEditAllEnabled: isEditAllEnabled ?? this.isEditAllEnabled,
+      isTaskLoading: isTaskLoading ?? this.isTaskLoading,
+      isDatasetEmpty: isDatasetEmpty ?? this.isDatasetEmpty,
+  );
+  }
+}
+
+
+
+########################################
+// word_marker_task_state.dart
+import 'dart:ui';
+
+import 'package:label_pro_client/domain/models/label.dart';
+
+import '../model/word.dart';
+
+class WordMarkerTaskState {
+  final List<Word> words;
+  final bool isLoading;
+  final List<Label> availableLabels;
+  final Map<int, Label> markedWords;
+  final Map<int, Color> colors;
+  final bool isDatasetEmpty;
+  final String filename;
+  final String idInFile;
+
+  const WordMarkerTaskState({
+  required this.words,
+  required this.isLoading,
+  required this.availableLabels,
+  required this.markedWords,
+  required this.colors,
+  required this.isDatasetEmpty,
+  required this.filename,
+  required this.idInFile,
+  });
+
+  WordMarkerTaskState.initial({
+  this.words = const [],
+  this.isLoading = false,
+  this.availableLabels = const [],
+  this.markedWords = const {},
+  this.colors = const {},
+  this.isDatasetEmpty = false,
+  this.filename = '',
+  this.idInFile = '',
+  });
+
+  WordMarkerTaskState copyWith({
+  List<Word>? words,
+  bool? isLoading,
+  List<Label>? availableLabels,
+  Map<int, Label>? markedWords,
+  Map<int, Color>? colors,
+  bool? isDatasetEmpty,
+  String? filename,
+  String? idInFile,
+  }) {
+  return WordMarkerTaskState(
+      isDatasetEmpty: isDatasetEmpty ?? this.isDatasetEmpty,
+      words: words ?? this.words,
+      isLoading: isLoading ?? this.isLoading,
+      availableLabels: availableLabels ?? this.availableLabels,
+      markedWords: markedWords ?? this.markedWords,
+      colors: colors ?? this.colors,
+      filename: filename ?? this.filename,
+      idInFile: idInFile ?? this.idInFile,
+  );
+  }
+}
+
+
+// word_marker_task_cubit.dart
+import 'dart:convert';
+import 'dart:ui';
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/core_ui/theme/app_colors.dart';
+import 'package:label_pro_client/domain/exceptions/exceptions.dart';
+import 'package:label_pro_client/domain/models/label.dart';
+import 'package:label_pro_client/domain/models/tagging_task_result.dart';
+import 'package:label_pro_client/domain/models/task_types/word_tagging_solution_data.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:label_pro_client/features/tagging/tasks/word_marker/bloc/word_marker_task_state.dart';
+import 'package:label_pro_client/features/tagging/tasks/word_marker/model/word.dart';
+
+class WordMarkerTaskCubit extends Cubit<WordMarkerTaskState> {
+  final DatasetRepository _datasetRepository;
+
+  WordMarkerTaskCubit({
+  required List<Label> labels,
+  required DatasetRepository datasetRepository,
+  })  : _datasetRepository = datasetRepository,
+    super(
+          WordMarkerTaskState.initial(
+      availableLabels: labels,
+          ),
+    ) {
+  _init();
+  }
+
+  bool _isNotPunctuation(String text) {
+  final punctuationRegex = RegExp(r'^[^\p{P}]+$', unicode: true);
+  return punctuationRegex.hasMatch(text);
+  }
+
+  Future<void> _init() async {
+  try {
+      emit(
+    state.copyWith(
+          markedWords: {},
+          isLoading: true,
+    ),
+      );
+      final task = await _datasetRepository.getTaggingTask();
+      final Map<int, Color> colors = {};
+      for (int i = 0; i < state.availableLabels.length; i++) {
+    colors[state.availableLabels[i].id] = AppColors.accentColorFromIndex(i);
+      }
+
+      emit(
+    state.copyWith(
+          idInFile: task.idInFile,
+          filename: task.filename,
+          colors: colors,
+          isLoading: false,
+          words: task.data
+              .split(' ')
+              .map(
+        (e) => Word(
+                  data: e,
+                  selectable: _isNotPunctuation(e),
+        ),
+              )
+              .toList(),
+    ),
+      );
+  } on DatasetIsEmpty {
+      emit(
+    state.copyWith(
+          isDatasetEmpty: true,
+          isLoading: false,
+    ),
+      );
+  }
+  }
+
+  void updateMark({
+  required int wordIndex,
+  required Label label,
+  }) {
+  final newMarks = {...state.markedWords};
+  newMarks[wordIndex] = label;
+  emit(
+      state.copyWith(
+    markedWords: newMarks,
+      ),
+  );
+  }
+
+  void clearMark({
+  required int wordIndex,
+  }) {
+  final newMarks = {...state.markedWords};
+  newMarks.remove(wordIndex);
+  emit(
+      state.copyWith(
+    markedWords: newMarks,
+      ),
+  );
+  }
+
+  Future<void> submitTask() async {
+  print(
+      jsonEncode(
+    WordTaggingSolutionData(
+          markedWords: state.markedWords.map(
+      (key, value) => MapEntry(key, value.name),
+          ),
+    ).toJson(),
+      ),
+  );
+  final settings = await appLocator<SettingsRepository>().readSettings();
+  try {
+      await _datasetRepository.submitTaggingTask(
+    TaggingTaskResult(
+          filename: state.filename,
+          idInFile: state.idInFile,
+          datasetId: settings.datasetId,
+          data: WordTaggingSolutionData(
+      markedWords: state.markedWords.map(
+              (key, value) => MapEntry(key, value.name),
+      ),
+          ).toJson(),
+    ),
+      );
+      _init();
+  } on DatasetIsEmpty {
+      emit(state.copyWith(
+    isDatasetEmpty: true,
+    isLoading: false,
+      ));
+  }
+  }
+}
+
+
+
+########################################
+// settings_cubit.dart
+import 'package:auto_route/auto_route.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
+import 'package:label_pro_client/domain/repository/dataset_repository.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
+import 'package:label_pro_client/features/settings/bloc/settings_state.dart';
+
+class SettingsCubit extends Cubit<SettingsState> {
+  final SettingsRepository _settingsRepository;
+  final DatasetRepository _datasetRepository;
+
+  final TextEditingController serverAddressController = TextEditingController();
+  final TextEditingController serverPortController = TextEditingController();
+  final TextEditingController datasetIdController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  SettingsCubit({
+  required DatasetRepository datasetRepository,
+  required SettingsRepository settingsRepository,
+  })  : _datasetRepository = datasetRepository,
+    _settingsRepository = settingsRepository,
+    super(SettingsState.initial()) {
+  _init();
+  }
+
+  @override
+  Future<void> close() async {
+  await super.close();
+  serverAddressController.dispose();
+  serverPortController.dispose();
+  datasetIdController.dispose();
+  usernameController.dispose();
+  passwordController.dispose();
+  }
+
+  Future<void> _init() async {
+  final settings = await _settingsRepository.readSettings();
+  emit(
+      state.copyWith(
+    appSettings: settings,
+    serverAvailable: () => null,
+      ),
+  );
+  serverAddressController.text = settings.serverAddress;
+  serverPortController.text = settings.servicePort.toString();
+  datasetIdController.text = settings.datasetId.toString();
+  usernameController.text = settings.username;
+  passwordController.text = settings.password;
+  }
+
+  Future<void> testSeverConfig({
+  required String serverIp,
+  required int port,
+  required int datasetId,
+  }) async {
+  emit(
+      state.copyWith(
+    serverTestInProgress: true,
+      ),
+  );
+
+  final newSettings = state.appSettings.copyWith(
+      serverAddress: serverIp,
+      datasetId: datasetId,
+      servicePort: port,
+  );
+
+  serverAddressController.text = newSettings.serverAddress;
+  serverPortController.text = newSettings.servicePort.toString();
+  datasetIdController.text = newSettings.datasetId.toString();
+
+  await _settingsRepository.updateSettings(
+      newSettings,
+  );
+
+  final hasConnection = await _datasetRepository.checkDatasetConnection(newSettings.datasetId);
+
+  emit(
+      state.copyWith(
+    appSettings: newSettings,
+    serverAvailable: () => hasConnection,
+    serverTestInProgress: false,
+      ),
+  );
+  }
+
+  Future<void> signIn() async {
+  try {
+      emit(state.copyWith(
+    authInProgress: true,
+    authSucceded: () => null,
+      ));
+      await _datasetRepository.confirmDatasetAuthentication(
+    name: usernameController.text,
+    password: passwordController.text,
+      );
+
+      emit(
+    state.copyWith(
+          authInProgress: false,
+          authSucceded: () => true,
+    ),
+      );
+  } catch (e) {
+      emit(
+    state.copyWith(
+          authInProgress: false,
+          authSucceded: () => false,
+    ),
+      );
+  } finally {
+      final newSettings = state.appSettings.copyWith(
+    username: usernameController.text,
+    password: passwordController.text,
+      );
+      await _settingsRepository.updateSettings(
+    newSettings,
+      );
+      emit(
+    state.copyWith(appSettings: newSettings),
+      );
+  }
+  }
+
+  Future<void> updateSettings() async {
+  final newSettings = AppSettings(
+      serverAddress: serverAddressController.text,
+      servicePort: int.parse(serverPortController.text),
+      username: usernameController.text,
+      password: passwordController.text,
+      datasetId: int.parse(datasetIdController.text),
+  );
+
+  await _settingsRepository.updateSettings(
+      newSettings,
+  );
+  }
+}
+
+
+// settings_state.dart
+import 'package:label_pro_client/domain/models/app_settings.dart';
+
+class SettingsState {
+  final AppSettings appSettings;
+  final bool hasError;
+  final bool serverTestInProgress;
+  final bool? serverAvailable;
+  final bool? authSucceded;
+  final bool authInProgress;
+
+  const SettingsState({
+  required this.authSucceded,
+  required this.authInProgress,
+  required this.appSettings,
+  required this.hasError,
+  required this.serverTestInProgress,
+  required this.serverAvailable,
+  });
+
+  const SettingsState.initial({
+  this.appSettings = const AppSettings.empty(),
+  this.authInProgress = false,
+  this.hasError = false,
+  this.serverTestInProgress = false,
+  this.serverAvailable,
+  this.authSucceded,
+  });
+
+  SettingsState copyWith({
+  AppSettings? appSettings,
+  bool? hasError,
+  bool? serverTestInProgress,
+  bool? Function()? serverAvailable,
+  bool? Function()? authSucceded,
+  bool? authInProgress,
+  }) {
+  return SettingsState(
+      appSettings: appSettings ?? this.appSettings,
+      hasError: hasError ?? this.hasError,
+      serverTestInProgress: serverTestInProgress ?? this.serverTestInProgress,
+      serverAvailable: serverAvailable != null ? serverAvailable() : this.serverAvailable,
+      authSucceded: authSucceded != null ? authSucceded() : this.authSucceded,
+      authInProgress: authInProgress ?? this.authInProgress,
+  );
+  }
+}
+
+

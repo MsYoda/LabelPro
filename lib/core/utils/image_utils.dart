@@ -3,8 +3,12 @@ import 'dart:ui' as ui;
 
 import 'package:http/http.dart' as http;
 
-String buildFileUrl(String filePath) {
-  return 'http://localhost:8080/file/?file_path=$filePath';
+String buildFileUrl({
+  required String host,
+  required int port,
+  required String filePath,
+}) {
+  return 'http://$host:$port/api/file/?file_path=$filePath';
 }
 
 Future<ui.Size> getImageSize(String imageUrl) async {

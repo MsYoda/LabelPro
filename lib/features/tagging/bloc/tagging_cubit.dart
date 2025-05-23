@@ -47,9 +47,7 @@ class TaggingCubit extends Cubit<TaggingState> {
           dataset: () => dataset,
         ),
       );
-      print('DATASET LOADeD');
     } catch (e) {
-      print(e);
       emit(
         state.copyWith(
           dataset: () => null,

@@ -2,10 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:label_pro_client/core/core.dart';
 import 'package:label_pro_client/core/utils/image_utils.dart';
 import 'package:label_pro_client/core_ui/submit_button.dart';
+import 'package:label_pro_client/domain/models/app_settings.dart';
 import 'package:label_pro_client/domain/models/enums/custom_data_type.dart';
 import 'package:label_pro_client/domain/models/enums/custom_input_type.dart';
+import 'package:label_pro_client/domain/repository/settings_repository.dart';
 import 'package:label_pro_client/features/tagging/bloc/tagging_cubit.dart';
 import 'package:label_pro_client/features/tagging/tasks/custom/bloc/custom_task_cubit.dart';
 import 'package:label_pro_client/features/tagging/tasks/custom/bloc/custom_task_state.dart';
@@ -107,12 +110,23 @@ class _CustomTaskContentState extends State<CustomTaskContent> {
                                             height: MediaQuery.sizeOf(context).height * 0.5,
                                             child: ClipRRect(
                                               borderRadius: BorderRadius.circular(16),
-                                              child: Image.network(
-                                                buildFileUrl(
-                                                  widget.state.data,
-                                                ),
-                                                height: MediaQuery.sizeOf(context).height * 0.5,
-                                              ),
+                                              child: FutureBuilder<AppSettings>(
+                                                  future: appLocator<SettingsRepository>()
+                                                      .readSettings(),
+                                                  builder: (context, snapshot) {
+                                                    if (snapshot.hasData) {
+                                                      return Image.network(
+                                                        buildFileUrl(
+                                                          host: snapshot.data!.serverAddress,
+                                                          port: snapshot.data!.servicePort,
+                                                          filePath: widget.state.data,
+                                                        ),
+                                                        height:
+                                                            MediaQuery.sizeOf(context).height * 0.5,
+                                                      );
+                                                    }
+                                                    return CircularProgressIndicator();
+                                                  }),
                                             ),
                                           ),
                                         CustomDataType.string => Text(

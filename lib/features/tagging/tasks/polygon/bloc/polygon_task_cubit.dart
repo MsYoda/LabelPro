@@ -38,14 +38,18 @@ class PolygonTaskCubit extends Cubit<PolygonTaskState> {
     );
     try {
       final task = await _datasetRepository.getTaggingTask();
-
-      final size = await getImageSize(
-        buildFileUrl(task.data),
+      final appSettings = await appLocator<SettingsRepository>().readSettings();
+      final url = buildFileUrl(
+        host: appSettings.serverAddress,
+        port: appSettings.servicePort,
+        filePath: task.data,
       );
+
+      final size = await getImageSize(url);
       emit(
         state.copyWith(
           size: size,
-          imageUrl: buildFileUrl(task.data),
+          imageUrl: url,
           isTaskLoading: false,
           idInFile: task.idInFile,
           filename: task.filename,
